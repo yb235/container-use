@@ -1,0 +1,470 @@
+---
+title: Architecture Overview
+description: "Deep dive into container-use's architecture, components, and design principles."
+icon: diagram-project
+---
+
+## Introduction
+
+Container Use is a sophisticated system that provides isolated, containerized development environments for AI coding agents. It combines **Git**, **Docker containers (via Dagger)**, and the **Model Context Protocol (MCP)** to enable safe, parallel agent workflows.
+
+This document explains the architecture, core components, data flow, and design decisions that make container-use work.
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      AI Coding Agent                             │
+│            (Claude Code, Cursor, Amazon Q, etc.)                 │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ MCP Protocol (JSON-RPC over stdio)
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   MCP Server (container-use stdio)               │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Tools: environment_create, environment_run_cmd,          │  │
+│  │         environment_file_*, environment_add_service, etc. │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+        ┌──────────────┴──────────────┐
+        ▼                             ▼
+┌────────────────┐            ┌────────────────┐
+│   Repository   │            │  Environment   │
+│   Management   │            │   Management   │
+│                │            │                │
+│ • Git branches │            │ • Containers   │
+│ • Worktrees    │            │ • State        │
+│ • Git notes    │            │ • Services     │
+└────────┬───────┘            └────────┬───────┘
+         │                             │
+         ▼                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        Storage Layer                             │
+│                                                                  │
+│  User Repository              ~/.config/container-use/          │
+│  ├── main                     ├── repos/                        │
+│  ├── feature-branch           │   └── project/ (bare repo)      │
+│  └── cu-env-id               ├── worktrees/                     │
+│      (checkout branch)        │   └── env-id/ (working copy)    │
+│                               └── ...                            │
+│                                                                  │
+│            Dagger Container Runtime (Docker/Podman)              │
+│            └── Container: /workdir (mounted from worktree)       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. MCP Server (`mcpserver/`)
+
+The **Model Context Protocol Server** is the interface between AI agents and container-use. It:
+
+- **Listens on stdio** for JSON-RPC requests from agents
+- **Exposes tools** that agents can call (e.g., `environment_create`, `environment_run_cmd`)
+- **Manages Dagger client** connection for container operations
+- **Supports two modes**:
+  - **Multi-tenant**: Multiple agents/sessions, requires explicit `environment_id` in requests
+  - **Single-tenant**: One agent/session, environment ID is tracked automatically
+
+**Key Files:**
+- `tools.go` - Defines all MCP tools and their implementations
+- `singletenant.go` - Single-tenant mode session management
+- `args.go` - Request argument parsing and validation
+
+**Available Tools:**
+- `environment_create` - Creates a new isolated environment
+- `environment_open` - Opens/loads an existing environment
+- `environment_run_cmd` - Executes commands in the environment
+- `environment_file_read/write/edit/delete/list` - File operations
+- `environment_add_service` - Adds auxiliary services (databases, caches, etc.)
+- `environment_checkpoint` - Saves the current state
+- `environment_config` - Views/modifies environment configuration
+- `environment_update_metadata` - Updates environment title/description
+
+### 2. Environment Management (`environment/`)
+
+The **Environment** component manages individual containerized workspaces. Each environment is:
+
+- **A Git branch** in the container-use remote
+- **A Dagger container** with the code mounted at `/workdir`
+- **Stateful** - all changes are persisted in Git
+
+**Key Files:**
+- `environment.go` - Core environment logic, container operations
+- `config.go` - Environment configuration (base image, setup commands, secrets)
+- `state.go` - Container state serialization and persistence
+- `service.go` - Multi-container service management
+- `filesystem.go` - File operations within containers
+- `note.go` - Git notes for operation logging
+
+**Environment Lifecycle:**
+
+```
+1. Create
+   ├─ Generates unique ID (e.g., "fancy-mallard")
+   ├─ Creates Git branch in container-use remote
+   ├─ Sets up worktree in ~/.config/container-use/worktrees/
+   ├─ Builds base container (base image + setup commands)
+   └─ Stores initial state in Git notes
+
+2. Execute Commands
+   ├─ Container loads from saved state
+   ├─ Command runs in container
+   ├─ File changes written to container filesystem
+   ├─ Container state saved (Dagger LLB)
+   └─ Changes committed to environment branch
+
+3. Checkpoint
+   ├─ Exports container filesystem to worktree
+   ├─ Commits changes with message
+   ├─ Saves container state to Git notes
+   └─ Pushes to container-use remote
+
+4. Merge/Apply
+   ├─ User reviews work with diff/log/checkout
+   ├─ Accepts with merge (preserves commits) or apply (stages changes)
+   └─ Environment branch merges into user's current branch
+
+5. Delete
+   ├─ Removes worktree
+   ├─ Deletes branch from container-use remote
+   └─ Cleans up local tracking branch
+```
+
+### 3. Repository Management (`repository/`)
+
+The **Repository** component handles all Git operations and coordinates between the user's repository and container-use's internal storage.
+
+**Key Files:**
+- `repository.go` - High-level repository operations
+- `git.go` - Low-level Git command execution, worktree management
+- `flock.go` - File locking for concurrent safety
+
+**Git Architecture:**
+
+```
+User Repository (source)          container-use Remote
+├── main                          ~/.config/container-use/
+├── feature-branch                ├── repos/project/ (bare)
+└── cu-fancy-mallard              │   ├── refs/heads/fancy-mallard
+    (local checkout)              │   └── refs/notes/container-use-state
+                                  └── worktrees/fancy-mallard/
+                                      ├── .git → ../repos/project/worktrees/...
+                                      └── (code files)
+                                          │
+                                          ▼ mounted in
+                                      Container: /workdir
+```
+
+**Key Operations:**
+
+- **Create**: `initializeWorktree()` pushes current branch to create environment branch
+- **Update**: `propagateToWorktree()` exports container changes and commits to Git
+- **Checkpoint**: `propagateToGit()` commits and pushes with operation log
+- **State Management**: `saveState()` / `loadState()` using Git notes
+- **Merge/Apply**: Standard Git merge/squash operations
+
+**Git Notes Usage:**
+
+Container-use stores metadata in Git notes without modifying commits:
+
+- `refs/notes/container-use-state` - Container state (Dagger LLB ID)
+- `refs/notes/container-use` - Operation logs (what commands were run)
+
+### 4. Configuration System (`environment/config.go`, `cmd/container-use/config.go`)
+
+Environments are configured through `.container-use/environment.json`:
+
+```json
+{
+  "base_image": "python:3.11",
+  "workdir": "/workdir",
+  "setup_commands": [
+    "apt-get update",
+    "apt-get install -y build-essential"
+  ],
+  "install_commands": [
+    "pip install -r requirements.txt"
+  ],
+  "env": [
+    "PYTHONUNBUFFERED=1",
+    "DEBUG=true"
+  ],
+  "secrets": [
+    "API_KEY=op://vault/item/field",
+    "DB_PASSWORD=file:///path/to/secret"
+  ],
+  "services": [
+    {
+      "name": "postgres",
+      "image": "postgres:16",
+      "exposed_ports": [5432],
+      "env": ["POSTGRES_PASSWORD=secret"]
+    }
+  ]
+}
+```
+
+**Configuration Inheritance:**
+1. New environments start with default config
+2. Agents can modify config in their environment
+3. Users can import agent config changes with `container-use config import`
+
+### 5. Secrets Management
+
+Secrets are configured but **values are never stored**. Instead, references are stored:
+
+- **1Password**: `op://vault/item/field` - resolved at runtime
+- **Environment**: `env:VAR_NAME` - reads from host environment
+- **File**: `file:///path/to/secret` - reads from file
+
+When commands run, container-use:
+1. Resolves secret references
+2. Injects as environment variables in container
+3. Strips secret values from logs/output
+
+This ensures agents can **use** secrets without the AI model **seeing** them.
+
+## Data Flow
+
+### Creating and Using an Environment
+
+```
+1. Agent calls environment_create
+   ├─ MCP server receives request
+   ├─ Repository.Create() called
+   │   ├─ Generates ID: "fancy-mallard"
+   │   ├─ Creates branch: container-use/fancy-mallard
+   │   ├─ Sets up worktree in ~/.config/container-use/worktrees/fancy-mallard/
+   │   └─ Returns to MCP server
+   ├─ Environment.New() called with Dagger client
+   │   ├─ Loads config from .container-use/environment.json
+   │   ├─ Builds base container (dag.Container().From(baseImage))
+   │   ├─ Runs setup commands
+   │   ├─ Copies worktree to /workdir
+   │   ├─ Saves container state (containerID)
+   │   └─ Returns Environment object
+   └─ Returns environment ID to agent
+
+2. Agent calls environment_run_cmd(id, cmd)
+   ├─ MCP server receives request
+   ├─ Repository.Get() loads environment
+   │   ├─ Reads Git notes for container state
+   │   └─ Reconstructs Environment from state
+   ├─ Environment.RunCommand(cmd)
+   │   ├─ Loads container from state: dag.LoadContainerFromID()
+   │   ├─ Executes: container.WithExec(cmd)
+   │   ├─ Captures stdout/stderr
+   │   ├─ Updates container state
+   │   └─ Returns output
+   ├─ Repository.Update() persists changes
+   │   ├─ Exports container filesystem to worktree
+   │   ├─ Commits changes to Git
+   │   ├─ Saves new container state in Git notes
+   │   └─ Pushes to container-use remote
+   └─ Returns output to agent
+
+3. User reviews work
+   ├─ container-use list - shows all environments
+   ├─ container-use diff fancy-mallard - shows changes
+   ├─ container-use log fancy-mallard - shows commit history
+   └─ container-use checkout fancy-mallard - creates local branch
+
+4. User accepts work
+   ├─ container-use merge fancy-mallard
+   │   └─ git merge --no-ff container-use/fancy-mallard
+   └─ OR container-use apply fancy-mallard
+       └─ git merge --squash container-use/fancy-mallard
+```
+
+## Container State Management
+
+Container-use uses **Dagger's LLB (Low-Level Builder)** for container state:
+
+1. Each container operation returns a new container with a unique ID
+2. Container ID is a hash of all operations (reproducible)
+3. IDs are stored in Git notes as the "state"
+4. Containers can be reconstructed: `dag.LoadContainerFromID(id)`
+
+**Why Dagger?**
+- Reproducible builds through content-addressed storage
+- Efficient caching of container layers
+- Platform-agnostic (works with Docker, Podman, Kubernetes)
+- Programmatic API for container operations
+
+## Concurrency and Safety
+
+**File Locking (`repository/flock.go`):**
+- Uses `flock` for file-level locks
+- Lock types: `ForkRepo`, `Worktree`, `Notes`
+- Prevents race conditions in Git operations
+
+**Git Notes Locking:**
+- Read-write lock on notes operations
+- Prevents concurrent writes to container state
+
+**Worktree Isolation:**
+- Each environment has its own worktree
+- No shared mutable state between environments
+- Safe for parallel agent execution
+
+## CLI Commands (`cmd/container-use/`)
+
+The CLI provides human-friendly commands for interacting with environments:
+
+| Command | Purpose | Implementation |
+|---------|---------|----------------|
+| `list` | Show all environments | Lists branches in container-use remote |
+| `log <env>` | View environment history | `git log` on environment branch |
+| `diff <env>` | Compare to current branch | `git diff` between branches |
+| `checkout <env>` | Switch to environment | Creates tracking branch `cu-<env>` |
+| `merge <env>` | Accept with history | `git merge --no-ff` |
+| `apply <env>` | Accept and squash | `git merge --squash` |
+| `delete <env>` | Remove environment | Deletes worktree and branch |
+| `config` | Manage configuration | Edit `.container-use/environment.json` |
+
+## Design Principles
+
+### 1. Git as Source of Truth
+Everything is stored in Git:
+- Code changes in commits
+- Container state in Git notes
+- Configuration in `.container-use/environment.json`
+
+Benefits: version control, reproducibility, standard tools work
+
+### 2. Isolation by Default
+Each environment is completely isolated:
+- Own Git branch
+- Own worktree
+- Own container
+- Own services
+
+Benefits: no conflicts, safe experimentation, easy cleanup
+
+### 3. Standard Tools Integration
+Uses Git, Docker, and standard UNIX tools:
+- `git log` to view history
+- `git diff` to see changes
+- `git checkout` to review work
+- Standard merge workflows
+
+Benefits: familiar workflows, existing tools work, no lock-in
+
+### 4. Stateless MCP Server
+The MCP server doesn't maintain state:
+- Each request loads from Git
+- State persists in repository
+- Server can restart without loss
+
+Benefits: resilient, simple, no state drift
+
+### 5. Transparent Operations
+Everything is observable:
+- Commands logged in Git notes
+- Container state visible
+- File changes in standard Git
+- Real commit history
+
+Benefits: debugging, auditing, trust
+
+## Extension Points
+
+### Adding New MCP Tools
+
+1. Define tool in `mcpserver/tools.go`:
+```go
+func createMyNewTool(singleTenant bool) *Tool {
+    return &Tool{
+        Definition: newEnvironmentTool(
+            envToolOptions{
+                name: "environment_my_operation",
+                description: "Does something useful",
+                useCurrentEnvironment: singleTenant,
+            },
+            mcp.WithString("param", mcp.Required()),
+        ),
+        Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+            repo, env, err := openEnvironment(ctx, request)
+            // ... implementation
+        },
+    }
+}
+```
+
+2. Add to `createTools()` array
+3. Implement the operation in `environment/environment.go` if needed
+
+### Adding New Configuration Options
+
+1. Add field to `EnvironmentConfig` in `environment/config.go`
+2. Handle in environment build process (`environment.go`)
+3. Add CLI commands in `cmd/container-use/config.go`
+4. Update `.container-use/environment.json` schema
+
+### Supporting New Container Runtimes
+
+Dagger supports multiple backends. To add support:
+1. Ensure Dagger supports the runtime
+2. No code changes needed - Dagger handles abstraction
+3. Configure runtime in Dagger settings
+
+## Performance Considerations
+
+**Worktree Creation:**
+- Uses Git worktrees (lightweight)
+- Shares objects with main repository
+- Fast branch switching
+
+**Container Caching:**
+- Dagger caches container layers
+- Repeated operations are fast
+- Content-addressed storage
+
+**Git Notes:**
+- Separate ref space from commits
+- Don't slow down normal Git operations
+- Can be fetched/pushed independently
+
+**Parallel Environments:**
+- Each environment is independent
+- File locks prevent conflicts
+- Limited by disk I/O and container resources
+
+## Debugging
+
+**Enable Debug Logging:**
+```bash
+container-use --debug stdio
+```
+
+**View Container State:**
+```bash
+# See what's in Git notes
+git notes --ref container-use-state show container-use/fancy-mallard
+
+# View operation log
+git log --notes=container-use container-use/fancy-mallard
+```
+
+**Inspect Worktree:**
+```bash
+# Direct access to environment files
+cd ~/.config/container-use/worktrees/fancy-mallard
+ls -la
+```
+
+**Test MCP Tools Manually:**
+```bash
+# Send JSON-RPC request
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | container-use stdio | jq
+```
+
+## Further Reading
+
+- [Environment Workflow Guide](/environment-workflow) - Using environments effectively
+- [MCP Protocol](https://modelcontextprotocol.io/) - Understanding the agent protocol
+- [Dagger Documentation](https://docs.dagger.io/) - Container operations API
+- [Git Worktrees](https://git-scm.com/docs/git-worktree) - Understanding worktrees
+- [Git Notes](https://git-scm.com/docs/git-notes) - Metadata storage

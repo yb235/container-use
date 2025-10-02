@@ -1,0 +1,809 @@
+---
+title: MCP API Reference
+description: "Complete reference for all MCP tools exposed by container-use."
+icon: plug
+---
+
+## Overview
+
+Container Use implements the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) to provide AI agents with tools for managing containerized development environments. This document details all available MCP tools, their parameters, and usage.
+
+## Connection
+
+To use these tools, agents connect to container-use via stdio:
+
+```bash
+container-use stdio [--single-tenant]
+```
+
+**Modes:**
+- **Multi-tenant (default)**: Multiple sessions, requires `environment_source` and `environment_id` in all requests
+- **Single-tenant**: Single session, environment context is tracked automatically
+
+## Tools
+
+### environment_create
+
+Creates a new isolated development environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `title` | string | Yes | Short description of work happening in this environment |
+| `from_git_ref` | string | No | Git reference to create environment from (default: HEAD). Can be branch name, tag, or SHA |
+| `allow_replace` | boolean | No (single-tenant only) | If true, replace existing environment for this session |
+| `explanation` | string | No | Detailed explanation of the environment purpose (for logging) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Environment created: fancy-mallard\n\nConfiguration:\n  Base Image: ubuntu:24.04\n  Workdir: /workdir\n  Setup Commands: 0\n  Services: 0\n  Secrets: 0"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_create",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "title": "Add login feature",
+      "from_git_ref": "main"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Environment gets a unique ID (e.g., "fancy-mallard")
+- Creates a new Git branch: `container-use/fancy-mallard`
+- Initializes container from base image with setup commands
+- Configuration loaded from `.container-use/environment.json`
+
+---
+
+### environment_open
+
+Opens an existing environment to view its details.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment to open |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Environment: fancy-mallard\nTitle: Add login feature\nCreated: 2024-01-15 10:30:00\nUpdated: 2024-01-15 10:35:00\n\nConfiguration:\n  Base Image: python:3.11\n  Workdir: /workdir\n  Services: postgres\n  Ports: 5000 -> http://localhost:54321"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_open",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard"
+    }
+  },
+  "id": 1
+}
+```
+
+---
+
+### environment_run_cmd
+
+Executes a shell command in the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment to run command in |
+| `command` | string | Yes | Shell command to execute |
+| `explanation` | string | No | Description of what the command does (logged in Git notes) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Exit code: 0\n\nStdout:\nHello, World!\n\nStderr:\n"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_run_cmd",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "command": "python app.py",
+      "explanation": "Start the Flask application"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Commands run in `/workdir` (configurable)
+- Environment variables from config are available
+- Secrets are injected as environment variables
+- Container state is saved after command execution
+- Changes automatically committed to environment branch
+
+---
+
+### environment_file_read
+
+Reads the contents of a file from the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `path` | string | Yes | Path to file (relative to workdir) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "# contents of file\nprint('Hello, World!')"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_file_read",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "path": "app.py"
+    }
+  },
+  "id": 1
+}
+```
+
+---
+
+### environment_file_write
+
+Writes content to a file in the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `path` | string | Yes | Path to file (relative to workdir) |
+| `content` | string | Yes | Content to write to file |
+| `explanation` | string | No | Description of the change (for commit message) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "File written: app.py"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_file_write",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "path": "requirements.txt",
+      "content": "flask==3.0.0\nrequests==2.31.0",
+      "explanation": "Add project dependencies"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Creates parent directories if needed
+- Overwrites existing files
+- Changes automatically committed
+
+---
+
+### environment_file_edit
+
+Applies a line-based patch to edit a file.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `path` | string | Yes | Path to file (relative to workdir) |
+| `edits` | array | Yes | Array of edit operations |
+| `explanation` | string | No | Description of the change |
+
+**Edit Operation:**
+
+```json
+{
+  "old_text": "line to find",
+  "new_text": "replacement text"
+}
+```
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "File edited: app.py\n1 edit(s) applied successfully"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_file_edit",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "path": "app.py",
+      "edits": [
+        {
+          "old_text": "DEBUG = False",
+          "new_text": "DEBUG = True"
+        }
+      ],
+      "explanation": "Enable debug mode"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Uses exact string matching
+- Each edit must match unique content
+- Edits applied sequentially
+- Preserves line endings
+
+---
+
+### environment_file_delete
+
+Deletes a file from the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `path` | string | Yes | Path to file (relative to workdir) |
+| `explanation` | string | No | Description of why file was deleted |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "File deleted: old_file.py"
+  }]
+}
+```
+
+---
+
+### environment_file_list
+
+Lists files and directories in the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `path` | string | No | Directory path (default: workdir root) |
+| `recursive` | boolean | No | List recursively (default: false) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "app.py\nrequirements.txt\ntemplates/\n  index.html\n  login.html\nstatic/\n  style.css"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_file_list",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "path": "templates",
+      "recursive": true
+    }
+  },
+  "id": 1
+}
+```
+
+---
+
+### environment_add_service
+
+Adds an auxiliary service (database, cache, etc.) to the environment.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `name` | string | Yes | Name of service |
+| `image` | string | Yes | Docker image for service |
+| `command` | string | No | Command to run (default: image default) |
+| `ports` | array[int] | No | Ports to expose |
+| `envs` | array[string] | No | Environment variables (KEY=VALUE format) |
+| `explanation` | string | No | Description of service purpose |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Service added: postgres\n\nEndpoints:\n  5432 -> postgres:5432 (environment)\n  5432 -> localhost:54321 (host)\n\nUse 'postgres:5432' to connect from your application"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_add_service",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "name": "postgres",
+      "image": "postgres:16",
+      "ports": [5432],
+      "envs": [
+        "POSTGRES_PASSWORD=secret",
+        "POSTGRES_DB=myapp"
+      ],
+      "explanation": "Add PostgreSQL database"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Services start automatically
+- Accessible via service name as hostname
+- Ports mapped to random host ports
+- Service state persisted in environment config
+
+---
+
+### environment_checkpoint
+
+Saves the current environment state with a checkpoint message.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `message` | string | Yes | Checkpoint message (commit message) |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Checkpoint created: abc1234\nMessage: Implemented user authentication"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_checkpoint",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "message": "Implemented user authentication"
+    }
+  },
+  "id": 1
+}
+```
+
+**Notes:**
+- Exports all container filesystem changes
+- Creates Git commit with message
+- Saves container state in Git notes
+- Pushes to container-use remote
+
+---
+
+### environment_config
+
+Views or modifies environment configuration.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `action` | string | Yes | Action: "show", "set_base_image", "add_setup_command", etc. |
+| `value` | string | Depends on action | Value for set operations |
+
+**Returns:**
+
+Depends on action. Example for "show":
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Base Image: python:3.11\nWorkdir: /workdir\nSetup Commands:\n  1. apt-get update\n  2. apt-get install -y build-essential\nSecrets: 2 configured\nServices: 1 (postgres)"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_config",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "action": "show"
+    }
+  },
+  "id": 1
+}
+```
+
+---
+
+### environment_update_metadata
+
+Updates environment title or description.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+| `environment_id` | string | Yes (multi-tenant) | ID of environment |
+| `title` | string | No | New title for environment |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "Environment metadata updated"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_update_metadata",
+    "arguments": {
+      "environment_source": "/path/to/repo",
+      "environment_id": "fancy-mallard",
+      "title": "Add login and registration features"
+    }
+  },
+  "id": 1
+}
+```
+
+---
+
+### environment_list
+
+Lists all environments in the repository.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `environment_source` | string | Yes (multi-tenant) | Path to the Git repository |
+
+**Returns:**
+
+```json
+{
+  "content": [{
+    "type": "text",
+    "text": "ID              TITLE                     CREATED         UPDATED\nfancy-mallard   Add login feature         2 hours ago     30 mins ago\nquiet-dolphin   Fix database migration    1 hour ago      20 mins ago"
+  }]
+}
+```
+
+**Example Usage:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "environment_list",
+    "arguments": {
+      "environment_source": "/path/to/repo"
+    }
+  },
+  "id": 1
+}
+```
+
+## Common Patterns
+
+### Basic Workflow
+
+```json
+// 1. Create environment
+{"method": "tools/call", "params": {
+  "name": "environment_create",
+  "arguments": {"environment_source": "/repo", "title": "Add feature"}
+}}
+// Response: Environment created: fancy-mallard
+
+// 2. Run commands
+{"method": "tools/call", "params": {
+  "name": "environment_run_cmd",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "command": "pip install flask"
+  }
+}}
+
+// 3. Write code
+{"method": "tools/call", "params": {
+  "name": "environment_file_write",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "path": "app.py",
+    "content": "from flask import Flask\napp = Flask(__name__)"
+  }
+}}
+
+// 4. Checkpoint progress
+{"method": "tools/call", "params": {
+  "name": "environment_checkpoint",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "message": "Initial Flask setup"
+  }
+}}
+```
+
+### Working with Services
+
+```json
+// Add database
+{"method": "tools/call", "params": {
+  "name": "environment_add_service",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "name": "postgres",
+    "image": "postgres:16",
+    "ports": [5432],
+    "envs": ["POSTGRES_PASSWORD=secret"]
+  }
+}}
+
+// Connect from application
+{"method": "tools/call", "params": {
+  "name": "environment_run_cmd",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "command": "psql -h postgres -U postgres -c 'CREATE DATABASE myapp;'"
+  }
+}}
+```
+
+### File Operations
+
+```json
+// List files
+{"method": "tools/call", "params": {
+  "name": "environment_file_list",
+  "arguments": {"environment_id": "fancy-mallard", "path": "."}
+}}
+
+// Read file
+{"method": "tools/call", "params": {
+  "name": "environment_file_read",
+  "arguments": {"environment_id": "fancy-mallard", "path": "config.py"}
+}}
+
+// Edit file
+{"method": "tools/call", "params": {
+  "name": "environment_file_edit",
+  "arguments": {
+    "environment_id": "fancy-mallard",
+    "path": "config.py",
+    "edits": [{"old_text": "DEBUG = False", "new_text": "DEBUG = True"}]
+  }
+}}
+```
+
+## Error Handling
+
+All tools return errors in the standard MCP format:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32603,
+    "message": "failed to execute command: exit code 1",
+    "data": {
+      "stdout": "",
+      "stderr": "bash: nonexistent: command not found"
+    }
+  },
+  "id": 1
+}
+```
+
+**Common Error Scenarios:**
+
+- **Environment not found**: `environment_id` doesn't exist
+- **Command failed**: Non-zero exit code from shell command
+- **File not found**: Reading non-existent file
+- **Edit failed**: `old_text` doesn't match file content
+- **Service failed**: Service failed to start within timeout
+
+## Single-Tenant Mode
+
+In single-tenant mode, the server tracks the current environment:
+
+```json
+// Create sets current environment automatically
+{"method": "tools/call", "params": {
+  "name": "environment_create",
+  "arguments": {"title": "Add feature"}  // No environment_source needed
+}}
+
+// Subsequent calls don't need environment_id
+{"method": "tools/call", "params": {
+  "name": "environment_run_cmd",
+  "arguments": {"command": "ls"}  // Uses current environment
+}}
+
+// Explicitly switch environments
+{"method": "tools/call", "params": {
+  "name": "environment_open",
+  "arguments": {"environment_id": "other-env"}  // Switches context
+}}
+```
+
+**Benefits:**
+- Simpler API for single-session agents
+- Natural conversation flow
+- Automatic environment tracking
+
+## Best Practices
+
+### For Agent Developers
+
+1. **Always checkpoint after significant work** - Creates recovery points
+2. **Use meaningful titles and explanations** - Helps humans review work
+3. **Prefer `environment_file_edit` over `write`** - Preserves other file content
+4. **Check return codes** - Don't assume commands succeeded
+5. **Use services for dependencies** - Don't install on base image
+
+### For Tool Implementation
+
+1. **Validate inputs** - Check required parameters
+2. **Provide helpful error messages** - Include context and suggestions
+3. **Log operations** - Use `explanation` parameter
+4. **Save state after changes** - Call `repository.Update()`
+5. **Handle cleanup** - Close resources, clean temp files
+
+## Further Reading
+
+- [Architecture Overview](/architecture) - System internals
+- [Environment Workflow](/environment-workflow) - User perspective
+- [Developer Guide](/developer-guide) - Contributing
+- [MCP Specification](https://modelcontextprotocol.io/specification) - Protocol details

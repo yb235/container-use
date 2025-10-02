@@ -1,0 +1,702 @@
+---
+title: Developer Guide
+description: "Contributing to container-use: setup, architecture, testing, and development workflows."
+icon: code
+---
+
+## Welcome Contributors!
+
+This guide helps you contribute to container-use. Whether you're fixing bugs, adding features, or improving documentation, this guide will get you started.
+
+## Prerequisites
+
+Before you begin, make sure you have:
+
+- **Go 1.21+** - [Install Go](https://go.dev/doc/install)
+- **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
+- **Git** - Should be installed on most systems
+- **Make** (optional) - For convenience commands
+
+## Getting Started
+
+### 1. Fork and Clone
+
+```bash
+# Fork the repository on GitHub, then:
+git clone https://github.com/YOUR-USERNAME/container-use.git
+cd container-use
+```
+
+### 2. Install Dependencies
+
+```bash
+go mod download
+```
+
+### 3. Build
+
+```bash
+# Build the binary
+go build -o container-use ./cmd/container-use
+
+# Or use Dagger
+dagger call build --platform=current export --path ./container-use
+```
+
+### 4. Run Tests
+
+```bash
+# Run all tests (unit + integration)
+go test ./...
+
+# Run only unit tests (fast)
+go test -short ./...
+
+# Run specific package tests
+go test ./environment
+go test ./repository
+go test ./mcpserver
+
+# Run with verbose output
+go test -v ./...
+
+# Run integration tests only (requires Docker)
+go test -count=1 -v ./environment/integration
+```
+
+### 5. Format Code
+
+**Always format before committing:**
+
+```bash
+go fmt ./...
+```
+
+### 6. Lint
+
+```bash
+# Using Dagger
+dagger call lint
+
+# Or install golangci-lint locally
+golangci-lint run
+```
+
+## Project Structure
+
+```
+container-use/
+├── cmd/
+│   └── container-use/          # CLI application
+│       ├── main.go             # Entry point
+│       ├── stdio.go            # MCP server command
+│       ├── list.go             # List command
+│       ├── log.go              # Log command
+│       ├── config.go           # Config management
+│       └── ...                 # Other CLI commands
+├── environment/                # Environment management
+│   ├── environment.go          # Core environment logic
+│   ├── config.go               # Configuration
+│   ├── state.go                # State persistence
+│   ├── service.go              # Service management
+│   ├── filesystem.go           # File operations
+│   └── integration/            # Integration tests
+├── repository/                 # Git repository operations
+│   ├── repository.go           # High-level operations
+│   ├── git.go                  # Git command execution
+│   └── flock.go                # File locking
+├── mcpserver/                  # MCP protocol server
+│   ├── tools.go                # MCP tool definitions
+│   ├── singletenant.go         # Single-tenant mode
+│   └── args.go                 # Request parsing
+├── rules/                      # Agent instructions
+│   ├── agent.md                # Generic agent rules
+│   └── cursor.mdc              # Cursor-specific rules
+├── docs/                       # Documentation (Mintlify)
+├── examples/                   # Example configurations
+└── .dagger/                    # Dagger module
+
+Key concepts:
+- cmd/: User-facing commands
+- environment/: Container lifecycle management
+- repository/: Git operations and worktree management
+- mcpserver/: MCP protocol implementation
+```
+
+## Development Workflow
+
+### Making Changes
+
+1. **Create a feature branch:**
+```bash
+git checkout -b feature/your-feature-name
+```
+
+2. **Make your changes**
+
+3. **Test your changes:**
+```bash
+go test -short ./...  # Unit tests
+go test ./...         # All tests
+go fmt ./...          # Format
+```
+
+4. **Commit your changes:**
+```bash
+git add .
+git commit -m "feat: add new feature"
+```
+
+Use [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` - New feature
+- `fix:` - Bug fix
+- `docs:` - Documentation changes
+- `test:` - Test changes
+- `refactor:` - Code refactoring
+- `chore:` - Maintenance tasks
+
+5. **Push and create PR:**
+```bash
+git push origin feature/your-feature-name
+```
+
+### Testing Your Changes
+
+#### Manual Testing with stdio
+
+**IMPORTANT:** You cannot test container-use in its own `/workdir`. Always test in a separate repository.
+
+```bash
+# Create a test repository
+mkdir /tmp/test-repo
+cd /tmp/test-repo
+git init
+touch README.md
+git add README.md
+git commit -m "initial commit"
+
+# Test the stdio interface
+echo '{"jsonrpc":"2.0","method":"ping","id":1}' | /path/to/container-use stdio
+
+# Test listing tools
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | /path/to/container-use stdio | jq
+
+# Test environment creation
+printf '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"environment_create","arguments":{"environment_source":"/tmp/test-repo","title":"Test Environment"}},"id":1}' | /path/to/container-use stdio | jq
+```
+
+#### Testing with a Real Agent
+
+1. Build your local version:
+```bash
+go build -o /tmp/container-use-dev ./cmd/container-use
+```
+
+2. Configure your agent to use the dev binary:
+```bash
+# For Claude Code
+claude mcp add container-use-dev -- /tmp/container-use-dev stdio
+
+# Test it
+cd /tmp/test-repo
+claude "Create a hello world app"
+```
+
+3. Check logs:
+```bash
+# Enable debug output
+/tmp/container-use-dev --debug stdio
+```
+
+#### Writing Tests
+
+**Unit Tests:**
+
+```go
+// environment/myfeature_test.go
+package environment
+
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+)
+
+func TestMyFeature(t *testing.T) {
+    // Arrange
+    env := &Environment{...}
+    
+    // Act
+    result, err := env.MyFeature()
+    
+    // Assert
+    assert.NoError(t, err)
+    assert.Equal(t, expected, result)
+}
+```
+
+**Integration Tests:**
+
+```go
+// environment/integration/myfeature_test.go
+package integration
+
+import (
+    "testing"
+    "github.com/stretchr/testify/require"
+)
+
+func TestMyFeatureIntegration(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping integration test")
+    }
+    
+    // Use helpers from integration/helpers.go
+    ctx := testContext(t)
+    repoPath := createTestRepo(t)
+    
+    // Test with real Git and Docker
+    repo, err := repository.Open(ctx, repoPath)
+    require.NoError(t, err)
+    
+    // ... test implementation
+}
+```
+
+## Common Development Tasks
+
+### Adding a New MCP Tool
+
+1. **Define the tool in `mcpserver/tools.go`:**
+
+```go
+func createMyNewTool(singleTenant bool) *Tool {
+    return &Tool{
+        Definition: newEnvironmentTool(
+            envToolOptions{
+                name:                  "environment_my_operation",
+                description:           "Description of what this does",
+                useCurrentEnvironment: singleTenant,
+            },
+            mcp.WithString("my_param",
+                mcp.Description("Description of parameter"),
+                mcp.Required(),
+            ),
+        ),
+        Handler: func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+            repo, env, err := openEnvironment(ctx, request)
+            if err != nil {
+                return nil, err
+            }
+
+            myParam, err := request.RequireString("my_param")
+            if err != nil {
+                return nil, err
+            }
+
+            // Implement your operation
+            result, err := env.MyOperation(ctx, myParam)
+            if err != nil {
+                return nil, err
+            }
+
+            // Persist changes
+            if err := repo.Update(ctx, env, "My operation completed"); err != nil {
+                return nil, err
+            }
+
+            return mcp.NewToolResultText(result), nil
+        },
+    }
+}
+```
+
+2. **Add to `createTools()` in `mcpserver/tools.go`:**
+
+```go
+func createTools(singleTenant bool) []*Tool {
+    return []*Tool{
+        // ... existing tools
+        createMyNewTool(singleTenant),
+    }
+}
+```
+
+3. **Implement the operation in `environment/environment.go`:**
+
+```go
+func (env *Environment) MyOperation(ctx context.Context, param string) (string, error) {
+    // Implementation
+    container := env.container()
+    
+    // Do something with the container
+    container = container.WithExec([]string{"sh", "-c", param})
+    
+    // Update environment state
+    if err := env.apply(ctx, container); err != nil {
+        return "", err
+    }
+    
+    return "success", nil
+}
+```
+
+4. **Write tests:**
+
+```go
+func TestMyOperation(t *testing.T) {
+    // Test implementation
+}
+```
+
+### Adding a New CLI Command
+
+1. **Create command file `cmd/container-use/mycommand.go`:**
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/dagger/container-use/repository"
+    "github.com/spf13/cobra"
+)
+
+var myCmd = &cobra.Command{
+    Use:   "mycommand [env]",
+    Short: "Short description",
+    Long:  `Long description with examples`,
+    Args:  cobra.ExactArgs(1),
+    ValidArgsFunction: suggestEnvironments,
+    RunE: func(cmd *cobra.Command, args []string) error {
+        ctx := cmd.Context()
+        envID := args[0]
+
+        repo, err := repository.Open(ctx, ".")
+        if err != nil {
+            return err
+        }
+
+        // Implement command logic
+        return nil
+    },
+}
+
+func init() {
+    rootCmd.AddCommand(myCmd)
+}
+```
+
+2. **Test manually:**
+```bash
+go build -o container-use ./cmd/container-use
+./container-use mycommand test-env
+```
+
+### Adding Configuration Options
+
+1. **Add field to `EnvironmentConfig` in `environment/config.go`:**
+
+```go
+type EnvironmentConfig struct {
+    // ... existing fields
+    MyNewOption string `json:"my_new_option,omitempty"`
+}
+```
+
+2. **Handle in environment creation (`environment/environment.go`):**
+
+```go
+func (env *Environment) buildBase(ctx context.Context, initialSourceDir *dagger.Directory) (*dagger.Container, error) {
+    // ... existing code
+    
+    if env.State.Config.MyNewOption != "" {
+        container = container.WithEnvVariable("MY_OPTION", env.State.Config.MyNewOption)
+    }
+    
+    return container, nil
+}
+```
+
+3. **Add CLI commands in `cmd/container-use/config.go`:**
+
+```go
+var configMyOptionSetCmd = &cobra.Command{
+    Use:   "set [value]",
+    Short: "Set my option",
+    Args:  cobra.ExactArgs(1),
+    RunE: func(cmd *cobra.Command, args []string) error {
+        value := args[0]
+        return updateConfig(cmd, func(config *environment.EnvironmentConfig) error {
+            config.MyNewOption = value
+            fmt.Printf("My option set to: %s\n", value)
+            return nil
+        })
+    },
+}
+```
+
+4. **Update documentation in `docs/environment-configuration.mdx`**
+
+## Debugging Tips
+
+### Debug Logging
+
+```go
+// Add debug logs
+import "log/slog"
+
+slog.Info("Debug message", "key", value)
+slog.Error("Error occurred", "error", err)
+```
+
+Run with debug output:
+```bash
+container-use --debug stdio
+```
+
+### Inspecting Git State
+
+```bash
+# View environment branches
+cd ~/.config/container-use/repos/PROJECT_NAME
+git branch -a
+
+# View Git notes
+git log --notes=container-use-state
+git log --notes=container-use
+
+# View specific note
+git notes --ref container-use-state show COMMIT
+```
+
+### Inspecting Worktrees
+
+```bash
+# Direct access to environment files
+cd ~/.config/container-use/worktrees/ENVIRONMENT_ID
+ls -la
+git status
+```
+
+### Debugging Container Issues
+
+```bash
+# View Dagger logs
+export _EXPERIMENTAL_DAGGER_RUNNER_HOST=unix:///var/run/buildkit/buildkitd.sock
+dagger version
+```
+
+### Testing Specific Scenarios
+
+```bash
+# Test with dirty working directory
+echo "test" > temp.txt
+# Don't commit, then test
+
+# Test with submodules
+git submodule add https://github.com/example/repo.git external
+
+# Test with different base images
+container-use config base-image set alpine:latest
+```
+
+## Code Style Guidelines
+
+### Go Code
+
+- Follow standard Go conventions
+- Use `gofmt` (enforced)
+- Write clear, self-documenting code
+- Add comments for complex logic
+- Keep functions small and focused
+
+**Good:**
+```go
+// calculateEnvID generates a unique environment identifier
+func calculateEnvID() string {
+    return petname.Generate(2, "-")
+}
+```
+
+**Bad:**
+```go
+// This function does stuff
+func doStuff(x interface{}) interface{} {
+    // Complex logic without explanation
+}
+```
+
+### Error Handling
+
+- Always check errors
+- Provide context in error messages
+- Use `fmt.Errorf` with `%w` for wrapping
+
+**Good:**
+```go
+if err := repo.Create(ctx, dag, title, "", "HEAD"); err != nil {
+    return fmt.Errorf("failed to create environment: %w", err)
+}
+```
+
+**Bad:**
+```go
+repo.Create(ctx, dag, title, "", "HEAD")  // ignoring error
+```
+
+### Testing
+
+- Write tests for new features
+- Maintain test coverage
+- Use table-driven tests for multiple cases
+- Use `testing.Short()` to separate unit/integration tests
+
+```go
+func TestMyFeature(t *testing.T) {
+    tests := []struct{
+        name string
+        input string
+        want string
+    }{
+        {"case1", "input1", "output1"},
+        {"case2", "input2", "output2"},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got := MyFeature(tt.input)
+            if got != tt.want {
+                t.Errorf("got %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+## Documentation
+
+### Code Documentation
+
+- Document all exported functions and types
+- Use complete sentences
+- Include examples for complex APIs
+
+```go
+// Environment represents an isolated containerized workspace.
+// Each environment has its own Git branch, worktree, and container.
+//
+// Example:
+//   env, err := New(ctx, NewEnvArgs{...})
+//   if err != nil {
+//       return err
+//   }
+//   defer env.Close()
+type Environment struct {
+    // ...
+}
+```
+
+### User Documentation
+
+Documentation is in `docs/` using Mintlify MDX format:
+
+```bash
+# Start local preview
+cd docs
+mint dev
+```
+
+**File structure:**
+- `docs/introduction.mdx` - Overview
+- `docs/quickstart.mdx` - Getting started
+- `docs/architecture.mdx` - This file!
+- `docs/environment-workflow.mdx` - User workflows
+- `docs/cli-reference.mdx` - CLI commands
+
+When adding features, update relevant docs:
+1. Architecture changes → `architecture.mdx`
+2. New commands → `cli-reference.mdx`
+3. Workflows → `environment-workflow.mdx`
+4. Config → `environment-configuration.mdx`
+
+## CI/CD
+
+The project uses GitHub Actions for:
+
+- **Tests**: Run on every PR
+- **Linting**: Enforced on PRs
+- **Builds**: Multi-platform builds
+- **Releases**: Automated with goreleaser
+
+Check `.github/workflows/` for CI configuration.
+
+## Getting Help
+
+- **Discord**: [Join #container-use channel](https://container-use.com/discord)
+- **GitHub Issues**: Report bugs or request features
+- **GitHub Discussions**: Ask questions
+
+## Release Process
+
+Maintainers follow this process:
+
+1. Update `CHANGELOG.md` with changes
+2. Tag release: `git tag v0.x.0`
+3. Push tag: `git push origin v0.x.0`
+4. GitHub Actions builds and releases automatically
+5. Update documentation site if needed
+
+## Common Gotchas
+
+### 1. Git Repository Context
+
+Always test in a proper Git repository, not in `/workdir`:
+```bash
+# BAD - testing in container-use's own directory
+cd /workdir && echo '...' | container-use stdio
+
+# GOOD - testing in a separate repo
+cd /tmp/test-repo && echo '...' | /path/to/container-use stdio
+```
+
+### 2. Dagger Context
+
+Integration tests need a Dagger client:
+```go
+if testing.Short() {
+    t.Skip("skipping integration test")
+}
+dag, err := dagger.Connect(ctx)
+require.NoError(t, err)
+defer dag.Close()
+```
+
+### 3. File Locking
+
+Use the lock manager for Git operations:
+```go
+err := r.lockManager.WithLock(ctx, LockTypeNotes, func() error {
+    // Git operation here
+    return nil
+})
+```
+
+### 4. Container State
+
+Always save state after modifications:
+```go
+container = container.WithExec(cmd)
+// Must update environment state!
+if err := env.apply(ctx, container); err != nil {
+    return err
+}
+```
+
+## Next Steps
+
+- Read [Architecture Overview](/architecture) for system design
+- Check [Contributing Guidelines](https://github.com/dagger/container-use/blob/main/CONTRIBUTING.md)
+- Browse [open issues](https://github.com/dagger/container-use/issues) for ideas
+- Join [Discord](https://container-use.com/discord) to discuss
+
+Happy coding! 🚀

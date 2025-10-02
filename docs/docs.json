@@ -40,7 +40,15 @@
         "group": "Reference",
         "pages": [
           "cli-reference",
-          "agent-integrations"
+          "agent-integrations",
+          "mcp-api-reference"
+        ]
+      },
+      {
+        "group": "Development",
+        "pages": [
+          "architecture",
+          "developer-guide"
         ]
       }
     ]
