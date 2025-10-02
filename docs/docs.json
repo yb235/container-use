@@ -25,7 +25,8 @@
         "group": "Get Started",
         "pages": [
           "introduction",
-          "quickstart"
+          "quickstart",
+          "faq"
         ]
       },
       {
@@ -33,7 +34,8 @@
         "pages": [
           "environment-workflow",
           "environment-configuration",
-          "secrets"
+          "secrets",
+          "troubleshooting"
         ]
       },
       {
