@@ -1,0 +1,376 @@
+---
+title: Glossary
+description: "Definitions of key terms and concepts in container-use."
+icon: book-open
+---
+
+## A
+
+### Agent
+An AI-powered coding assistant (like Claude Code, Cursor, Amazon Q) that uses container-use to work in isolated environments.
+
+### Apply
+Command that stages changes from an environment into your working directory for you to commit. Unlike merge, this squashes all commits into staged changes.
+
+**Usage:** `container-use apply fancy-mallard`
+
+**See also:** [Merge](#merge), [Environment Workflow](/environment-workflow)
+
+## B
+
+### Base Image
+The Docker image used as the foundation for environments. Defaults to `ubuntu:24.04` but can be customized.
+
+**Example:** `python:3.11`, `node:20`, `alpine:latest`
+
+**Configure:** `container-use config base-image set python:3.11`
+
+**See also:** [Environment Configuration](/environment-configuration)
+
+### Branch (Environment)
+A Git branch in the `container-use/` remote that stores an environment's code and history. Named with the environment ID (e.g., `container-use/fancy-mallard`).
+
+**See also:** [Environment](#environment), [Architecture](/architecture)
+
+## C
+
+### Checkpoint
+A snapshot of an environment's current state, saved as a Git commit with container state in notes.
+
+**Usage:** Via agent using `environment_checkpoint` tool
+
+**See also:** [MCP API Reference](/mcp-api-reference)
+
+### Configuration
+Settings that define how environments are created, including base image, setup commands, secrets, and services. Stored in `.container-use/environment.json`.
+
+**See also:** [Environment Configuration](/environment-configuration)
+
+### Container
+An isolated runtime environment where agent code executes. Powered by Docker and managed via Dagger.
+
+**See also:** [Docker](#docker), [Dagger](#dagger)
+
+### Container State
+A snapshot of a container's filesystem and configuration, stored as a Dagger LLB (Low-Level Builder) ID in Git notes. Allows reconstructing containers from history.
+
+**See also:** [Git Notes](#git-notes), [Architecture](/architecture)
+
+## D
+
+### Dagger
+A programmable container orchestration platform that container-use uses for container operations. Provides caching, reproducibility, and cross-platform support.
+
+**Learn more:** [dagger.io](https://dagger.io)
+
+**See also:** [Architecture](/architecture)
+
+### Docker
+Container runtime platform that provides the underlying container technology. Required to run container-use.
+
+**Install:** [docker.com/get-started](https://docker.com/get-started)
+
+## E
+
+### Environment
+An isolated, containerized workspace consisting of:
+- A Git branch for version control
+- A Docker container for execution  
+- A worktree for filesystem isolation
+- Configuration and state
+
+Each environment has a unique ID like "fancy-mallard" or "quiet-dolphin".
+
+**See also:** [Environment Workflow](/environment-workflow), [Architecture](/architecture)
+
+### Environment ID
+A unique identifier for an environment, typically two random words like "fancy-mallard" or "quiet-dolphin". Generated automatically using pet names.
+
+**Example:** `fancy-mallard`, `quiet-dolphin`, `brave-turtle`
+
+### Environment Source
+Path to the Git repository that an environment belongs to. Required in multi-tenant mode.
+
+**Example:** `/path/to/my-project`, `.`, `~/code/project`
+
+### Export
+Process of copying files from a container's filesystem to the worktree, making changes visible in Git.
+
+**See also:** [Worktree](#worktree), [Architecture](/architecture)
+
+## F
+
+### Fork (Repository)
+Internal bare Git repository in `~/.config/container-use/repos/` that stores environment branches. Not a GitHub fork, but a local Git repository.
+
+**Location:** `~/.config/container-use/repos/PROJECT-NAME/`
+
+**See also:** [Architecture](/architecture)
+
+## G
+
+### Git Notes
+Git feature for attaching metadata to commits without modifying them. Container-use uses two note refs:
+- `container-use-state` - Container state snapshots
+- `container-use` - Operation logs
+
+**View:** `git log --notes=container-use`
+
+**See also:** [Architecture](/architecture)
+
+### Git Worktree
+Git feature providing multiple working copies of a repository. Container-use uses worktrees for filesystem isolation of environments.
+
+**Location:** `~/.config/container-use/worktrees/ENVIRONMENT-ID/`
+
+**Learn more:** [git-scm.com/docs/git-worktree](https://git-scm.com/docs/git-worktree)
+
+**See also:** [Worktree](#worktree), [Architecture](/architecture)
+
+## H
+
+### Host
+Your local machine running container-use and Docker.
+
+## I
+
+### Install Commands
+Commands that run after code is copied into the container. Typically used for installing project dependencies.
+
+**Example:** `pip install -r requirements.txt`, `npm install`
+
+**Configure:** `container-use config install add "npm install"`
+
+**See also:** [Setup Commands](#setup-commands), [Environment Configuration](/environment-configuration)
+
+### Isolation
+Property of environments being completely independent - separate containers, branches, and filesystems. Enables parallel agent workflows without conflicts.
+
+**See also:** [Environment](#environment), [Architecture](/architecture)
+
+## L
+
+### LLB (Low-Level Builder)
+Dagger's container state format. A content-addressed DAG (Directed Acyclic Graph) representing container operations. Used for reproducible builds.
+
+**See also:** [Container State](#container-state), [Dagger](#dagger)
+
+## M
+
+### MCP (Model Context Protocol)
+Standard protocol for AI agents to interact with external tools. Container-use implements MCP to expose environment management tools to agents.
+
+**Specification:** [modelcontextprotocol.io](https://modelcontextprotocol.io)
+
+**See also:** [MCP API Reference](/mcp-api-reference), [Architecture](/architecture)
+
+### MCP Server
+The `container-use stdio` process that listens for MCP requests from agents and executes tools.
+
+**Start:** `container-use stdio`
+
+**See also:** [Agent Integration](/agent-integrations)
+
+### MCP Tool
+An operation that agents can invoke via MCP, like `environment_create`, `environment_run_cmd`, or `environment_file_write`.
+
+**List tools:** `echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | container-use stdio`
+
+**See also:** [MCP API Reference](/mcp-api-reference)
+
+### Merge
+Command that merges an environment's branch into your current branch, preserving all commit history. Creates a merge commit.
+
+**Usage:** `container-use merge fancy-mallard`
+
+**See also:** [Apply](#apply), [Environment Workflow](/environment-workflow)
+
+### Multi-Tenant Mode
+MCP server mode where multiple agents/sessions can be active. Requires explicit `environment_source` and `environment_id` in all requests.
+
+**Usage:** `container-use stdio` (default)
+
+**See also:** [Single-Tenant Mode](#single-tenant-mode)
+
+## P
+
+### Petname
+The naming scheme for environment IDs: two random words like "fancy-mallard". Makes IDs memorable and easier to type than UUIDs.
+
+**Examples:** `fancy-mallard`, `quiet-dolphin`, `brave-turtle`
+
+### Propagate
+Internal process of syncing container changes to worktree and Git. Happens automatically after operations.
+
+**See also:** [Export](#export), [Architecture](/architecture)
+
+## R
+
+### Remote (container-use)
+Git remote pointing to the internal fork repository. Environment branches live here.
+
+**Name:** `container-use`
+
+**URL:** `~/.config/container-use/repos/PROJECT-NAME/`
+
+**View:** `git remote -v`
+
+**See also:** [Fork](#fork-repository)
+
+## S
+
+### Secret
+Sensitive data (API key, password) that agents can use but can't see. Stored as references like `op://vault/item/field`, resolved at runtime.
+
+**Configure:** `container-use config secret set API_KEY op://vault/api/key`
+
+**See also:** [Secrets Management](/secrets)
+
+### Service
+An auxiliary container (database, cache, etc.) that runs alongside an environment. Accessible via hostname.
+
+**Example:** PostgreSQL, Redis, MongoDB
+
+**Add:** Via agent using `environment_add_service` tool
+
+**See also:** [MCP API Reference](/mcp-api-reference), [Environment Configuration](/environment-configuration)
+
+### Setup Commands
+Commands that run when creating an environment's base container. Used for installing system packages.
+
+**Example:** `apt-get update && apt-get install -y python3`
+
+**Configure:** `container-use config setup add "apt-get install -y python3"`
+
+**See also:** [Install Commands](#install-commands), [Environment Configuration](/environment-configuration)
+
+### Single-Tenant Mode
+MCP server mode for single agent/session. Automatically tracks current environment, so `environment_id` is optional in requests.
+
+**Usage:** `container-use stdio --single-tenant`
+
+**See also:** [Multi-Tenant Mode](#multi-tenant-mode)
+
+### Source Repository
+Your original Git repository where you work. Remains untouched until you merge/apply environment changes.
+
+**Location:** Your project directory (e.g., `/path/to/my-project`)
+
+**See also:** [Fork](#fork-repository)
+
+### State (Container)
+See [Container State](#container-state)
+
+### State (Environment)
+Complete information about an environment, including configuration, container ID, timestamps, and services. Stored in Git notes.
+
+**See also:** [Container State](#container-state), [Git Notes](#git-notes)
+
+### stdio
+Standard input/output. MCP servers communicate via stdio - reading JSON-RPC requests from stdin and writing responses to stdout.
+
+**Command:** `container-use stdio`
+
+**See also:** [MCP Server](#mcp-server)
+
+## T
+
+### Title
+Human-readable description of what work is happening in an environment.
+
+**Example:** "Add user authentication", "Fix database migration bug"
+
+**Set:** When creating environment or via `environment_update_metadata`
+
+### Tracking Branch
+Local Git branch that tracks an environment branch. Created by `container-use checkout`, named `cu-ENVIRONMENT-ID`.
+
+**Example:** `cu-fancy-mallard` tracks `container-use/fancy-mallard`
+
+**See also:** [Checkout](#checkout)
+
+## U
+
+### Update
+Process of persisting environment changes back to Git, including:
+1. Exporting container filesystem to worktree
+2. Creating Git commit
+3. Saving container state in notes
+4. Pushing to container-use remote
+
+Happens automatically after operations.
+
+**See also:** [Propagate](#propagate), [Architecture](/architecture)
+
+## W
+
+### Workdir
+Directory inside the container where code lives and commands execute. Defaults to `/workdir`.
+
+**Configure:** In `.container-use/environment.json` (not commonly changed)
+
+**See also:** [Environment Configuration](/environment-configuration)
+
+### Worktree
+A working copy of an environment's Git branch in the host filesystem. Located in `~/.config/container-use/worktrees/ENVIRONMENT-ID/`. Mounted into container at `/workdir`.
+
+**See also:** [Git Worktree](#git-worktree), [Architecture](/architecture)
+
+## Commands Reference
+
+Quick reference of common commands:
+
+| Command | Description |
+|---------|-------------|
+| `container-use list` | List all environments |
+| `container-use log ENV` | View environment commit history |
+| `container-use diff ENV` | See changes vs current branch |
+| `container-use checkout ENV` | Create local branch to review |
+| `container-use merge ENV` | Accept work with history |
+| `container-use apply ENV` | Accept work as staged changes |
+| `container-use delete ENV` | Remove environment |
+| `container-use prune` | Clean up old environments |
+| `container-use config show` | View configuration |
+| `container-use stdio` | Start MCP server |
+
+**See also:** [CLI Reference](/cli-reference)
+
+## File Locations
+
+Important paths in container-use:
+
+| Path | Description |
+|------|-------------|
+| `.container-use/environment.json` | Project configuration |
+| `~/.config/container-use/repos/` | Environment Git repositories |
+| `~/.config/container-use/worktrees/` | Environment working copies |
+| `~/.claude/mcp.json` | Claude Code MCP config |
+| `~/.cursor/mcp.json` | Cursor MCP config |
+
+**Note:** Paths use `~/.config` on macOS/Linux, `%APPDATA%` on Windows
+
+## Concepts Hierarchy
+
+Understanding how concepts relate:
+
+```
+Repository (Your Project)
+  └─ Environment (Isolated Workspace)
+      ├─ Branch (Version Control)
+      ├─ Worktree (Filesystem)
+      ├─ Container (Runtime)
+      │   └─ Services (Databases, etc.)
+      ├─ Configuration (Setup)
+      └─ State (Snapshots)
+```
+
+## Further Reading
+
+- [Architecture Overview](/architecture) - Deep dive into internals
+- [Developer Guide](/developer-guide) - Contributing
+- [FAQ](/faq) - Common questions
+- [MCP API Reference](/mcp-api-reference) - Complete API docs
+
+---
+
+**Can't find a term?** [Ask in Discord](https://container-use.com/discord) or search the [full documentation](/documentation-guide).

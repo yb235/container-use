@@ -1,0 +1,785 @@
+---
+title: Troubleshooting
+description: "Common issues and solutions when using container-use."
+icon: wrench
+---
+
+## General Issues
+
+### Docker Daemon Not Running
+
+**Symptom:** Error message "Cannot connect to Docker daemon" or similar.
+
+**Solution:**
+
+1. Check Docker is running:
+```bash
+docker ps
+```
+
+2. Start Docker Desktop (macOS/Windows) or Docker daemon (Linux):
+```bash
+# macOS/Windows: Start Docker Desktop app
+
+# Linux:
+sudo systemctl start docker
+```
+
+3. Verify you have permissions:
+```bash
+# Add yourself to docker group (Linux)
+sudo usermod -aG docker $USER
+# Then log out and back in
+```
+
+### Not in a Git Repository
+
+**Symptom:** Error "you must be in a git repository to use container-use"
+
+**Solution:**
+
+Container-use requires a Git repository. Initialize one:
+
+```bash
+git init
+git add .
+git commit -m "initial commit"
+```
+
+### Environment Not Found
+
+**Symptom:** Error "environment not found: fancy-mallard"
+
+**Possible Causes:**
+
+1. **Environment was deleted:**
+```bash
+# List existing environments
+container-use list
+```
+
+2. **Wrong repository:**
+```bash
+# Check you're in the correct directory
+pwd
+git remote -v
+```
+
+3. **Environment from different branch:**
+```bash
+# Environments are tied to the container-use remote
+cd ~/.config/container-use/repos/$(basename $(pwd))
+git branch -a
+```
+
+**Solution:**
+
+Create a new environment or switch to correct repository.
+
+## Installation Issues
+
+### Homebrew Installation Fails
+
+**Symptom:** `brew install dagger/tap/container-use` fails
+
+**Solution:**
+
+1. Update Homebrew:
+```bash
+brew update
+brew upgrade
+```
+
+2. Try installing dependencies first:
+```bash
+brew install docker git
+```
+
+3. Use alternative installation method:
+```bash
+curl -fsSL https://raw.githubusercontent.com/dagger/container-use/main/install.sh | bash
+```
+
+### Installation Script Hangs
+
+**Symptom:** Install script downloads but hangs
+
+**Solution:**
+
+1. Check your internet connection
+2. Try downloading manually:
+```bash
+# Find latest release
+curl -s https://api.github.com/repos/dagger/container-use/releases/latest | grep browser_download_url
+
+# Download for your platform
+curl -LO <url-from-above>
+tar -xzf container-use*.tar.gz
+sudo mv container-use /usr/local/bin/
+```
+
+### Permission Denied
+
+**Symptom:** "Permission denied" when running container-use
+
+**Solution:**
+
+```bash
+# Make binary executable
+chmod +x /path/to/container-use
+
+# Or install to system path with sudo
+sudo mv container-use /usr/local/bin/
+```
+
+## MCP / Agent Integration Issues
+
+### Agent Can't Find Container Use
+
+**Symptom:** Agent says "tool not found" or doesn't list container-use tools
+
+**Solution:**
+
+1. **Verify installation:**
+```bash
+which container-use
+container-use version
+```
+
+2. **Check MCP configuration:**
+```bash
+# For Claude Code
+cat ~/.claude/mcp.json
+
+# Should show container-use server config
+```
+
+3. **Test stdio directly:**
+```bash
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | container-use stdio | jq
+```
+
+4. **Reconfigure MCP:**
+```bash
+# Claude Code
+claude mcp add container-use -- container-use stdio
+
+# Or with full path
+claude mcp add container-use -- /usr/local/bin/container-use stdio
+```
+
+### MCP Server Hangs
+
+**Symptom:** Agent hangs when trying to use container-use
+
+**Possible Causes:**
+
+1. **Dagger connection issue** - Docker not running
+2. **Stdio buffering** - Output not flushed
+3. **Deadlock** - Rare internal issue
+
+**Solution:**
+
+1. Check Docker is running:
+```bash
+docker ps
+```
+
+2. Enable debug logging:
+```bash
+# Add to MCP config
+"args": ["--debug", "stdio"]
+```
+
+3. Test manually:
+```bash
+cd /tmp/test-repo
+git init
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"id":1}' | container-use --debug stdio
+```
+
+4. Check for zombie processes:
+```bash
+ps aux | grep container-use
+# Kill any hung processes
+kill <pid>
+```
+
+### Tools Not Working in Agent
+
+**Symptom:** Agent sees tools but calls fail with errors
+
+**Solution:**
+
+1. **Check you're in a Git repository:**
+```bash
+git status
+```
+
+2. **Verify Docker access:**
+```bash
+docker run hello-world
+```
+
+3. **Check disk space:**
+```bash
+df -h
+du -sh ~/.config/container-use
+```
+
+4. **Look at agent logs:**
+```bash
+# Claude Code
+tail -f ~/.claude/logs/mcp.log
+
+# Cursor
+# Check Cursor developer console
+```
+
+## Environment Issues
+
+### Container Fails to Build
+
+**Symptom:** "failed to build container" or "failed to pull image"
+
+**Possible Causes:**
+
+1. **Invalid base image** - Image doesn't exist or has wrong tag
+2. **Network issue** - Can't pull image
+3. **Setup command failed** - Error in setup commands
+
+**Solution:**
+
+1. **Test base image manually:**
+```bash
+docker pull ubuntu:24.04
+# Or your configured image
+docker pull $(container-use config show | grep "Base Image" | awk '{print $3}')
+```
+
+2. **Check setup commands:**
+```bash
+# View current config
+container-use config show
+
+# Test command manually
+docker run -it ubuntu:24.04 bash
+# Then run your setup commands
+```
+
+3. **Simplify configuration:**
+```bash
+# Reset to defaults
+mv .container-use/environment.json .container-use/environment.json.bak
+# Try again
+```
+
+4. **Check network:**
+```bash
+# Can you reach Docker Hub?
+curl -I https://hub.docker.com
+```
+
+### Command Execution Fails
+
+**Symptom:** Commands in environment return errors or hang
+
+**Solution:**
+
+1. **Check command syntax:**
+```bash
+# Commands run in sh -c, so use valid shell syntax
+# Good: "python app.py"
+# Bad: python app.py (as array)
+```
+
+2. **Check working directory:**
+```bash
+# Commands run in /workdir by default
+# Use absolute paths or check your config
+container-use config show | grep Workdir
+```
+
+3. **Check for missing dependencies:**
+```bash
+# Add to setup commands in .container-use/environment.json
+container-use config setup add "apt-get install -y python3"
+```
+
+4. **Enable debug output:**
+```bash
+# Check actual command output
+container-use --debug stdio
+```
+
+### File Operations Fail
+
+**Symptom:** Can't read, write, or edit files
+
+**Possible Causes:**
+
+1. **Wrong path** - Path doesn't exist
+2. **Permission issue** - File not readable/writable
+3. **Path is outside workdir** - Can't access parent directories
+
+**Solution:**
+
+1. **List files first:**
+```bash
+# Via agent: use environment_file_list tool
+# Via CLI: checkout environment and use ls
+container-use checkout fancy-mallard
+ls -la
+```
+
+2. **Use relative paths:**
+```bash
+# Good: "app.py" or "src/app.py"
+# Bad: "/workdir/app.py" (depends on config)
+```
+
+3. **Check file exists:**
+```bash
+container-use checkout fancy-mallard
+cat path/to/file
+```
+
+### Service Won't Start
+
+**Symptom:** `environment_add_service` fails or service not accessible
+
+**Possible Causes:**
+
+1. **Image pull failed** - Can't download service image
+2. **Port conflict** - Port already in use
+3. **Service crashed** - Service failed to start
+4. **Timeout** - Service takes too long to start
+
+**Solution:**
+
+1. **Test service image:**
+```bash
+docker pull postgres:16
+docker run -it postgres:16 bash
+```
+
+2. **Check port availability:**
+```bash
+# Service will use random host port automatically
+# Check what was assigned in output
+```
+
+3. **Increase timeout:**
+```bash
+# Services have 30s timeout by default
+# If service needs longer, it may fail
+# Try simpler service or check service logs
+```
+
+4. **Check service environment:**
+```bash
+# Ensure required environment variables are set
+# e.g., POSTGRES_PASSWORD for postgres
+```
+
+## Git Issues
+
+### Merge Conflicts
+
+**Symptom:** `container-use merge` fails with conflicts
+
+**Solution:**
+
+```bash
+# Option 1: Resolve conflicts manually
+git status
+# Edit conflicted files
+git add .
+git commit
+
+# Option 2: Use apply instead (squash)
+container-use apply fancy-mallard
+# Review changes
+git status
+git commit -m "Applied changes from fancy-mallard"
+
+# Option 3: Cherry-pick specific commits
+git log container-use/fancy-mallard
+git cherry-pick <commit-sha>
+```
+
+### Detached HEAD
+
+**Symptom:** "You are in 'detached HEAD' state"
+
+**Solution:**
+
+```bash
+# This is normal after checkout in some cases
+# Just create a branch if you want to keep changes
+git checkout -b review-fancy-mallard
+
+# Or go back to your original branch
+git checkout main
+```
+
+### Environment Branch Missing
+
+**Symptom:** Can't find environment in git branches
+
+**Solution:**
+
+```bash
+# Fetch from container-use remote
+cd ~/.config/container-use/repos/$(basename $(pwd))
+git fetch origin
+
+# Check branches
+git branch -a
+
+# Environment might be in different project
+ls ~/.config/container-use/repos/
+```
+
+### Git Notes Not Showing
+
+**Symptom:** Can't see container state or operation logs
+
+**Solution:**
+
+```bash
+# Fetch notes explicitly
+git fetch origin refs/notes/container-use-state:refs/notes/container-use-state
+git fetch origin refs/notes/container-use:refs/notes/container-use
+
+# View notes
+git log --notes=container-use-state
+git log --notes=container-use
+```
+
+## Performance Issues
+
+### Slow Environment Creation
+
+**Symptom:** Creating environments takes minutes
+
+**Possible Causes:**
+
+1. **Pulling large base image** - First time pulls are slow
+2. **Slow network** - Downloading images/packages
+3. **Complex setup commands** - Many dependencies to install
+4. **Disk I/O** - Slow disk or low space
+
+**Solution:**
+
+1. **Use cached images:**
+```bash
+# Pre-pull common images
+docker pull ubuntu:24.04
+docker pull python:3.11
+docker pull node:20
+```
+
+2. **Optimize setup commands:**
+```bash
+# Combine commands to reduce layers
+"setup_commands": [
+  "apt-get update && apt-get install -y python3 git curl && rm -rf /var/lib/apt/lists/*"
+]
+```
+
+3. **Use smaller base images:**
+```bash
+# Alpine is much smaller
+container-use config base-image set alpine:latest
+```
+
+4. **Check disk space:**
+```bash
+df -h
+# Clean up old Docker images
+docker system prune -a
+```
+
+### Slow Command Execution
+
+**Symptom:** Commands in environments take longer than expected
+
+**Solution:**
+
+1. **Check container resources:**
+```bash
+# Docker Desktop: Increase CPU/memory in settings
+```
+
+2. **Optimize command:**
+```bash
+# Use efficient tools
+# Bad: recursive operations on large directories
+# Good: targeted operations
+```
+
+3. **Check disk I/O:**
+```bash
+# Monitor disk usage
+iostat -x 1
+```
+
+### Many Environments Slow Down System
+
+**Symptom:** System slows down with many environments
+
+**Solution:**
+
+1. **Clean up old environments:**
+```bash
+# List all environments
+container-use list
+
+# Delete unused ones
+container-use delete old-env-1
+container-use delete old-env-2
+
+# Prune all at once (with confirmation)
+container-use prune
+```
+
+2. **Clean Docker cache:**
+```bash
+docker system prune -a --volumes
+```
+
+3. **Check disk usage:**
+```bash
+du -sh ~/.config/container-use/*
+# Remove old repos manually if needed
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```bash
+# For MCP server
+container-use --debug stdio
+
+# Set in agent MCP config
+"args": ["--debug", "stdio"]
+```
+
+### Inspect Environment State
+
+```bash
+# View worktree directly
+cd ~/.config/container-use/worktrees/fancy-mallard
+ls -la
+git status
+git log
+
+# View Git notes
+git notes --ref container-use-state show
+git log --notes=container-use
+```
+
+### Test MCP Tools Manually
+
+```bash
+# Initialize
+echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"id":1}' | container-use stdio | jq
+
+# List tools
+echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | container-use stdio | jq
+
+# Create environment
+printf '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"environment_create","arguments":{"environment_source":"/tmp/test","title":"Test"}},"id":1}' | container-use stdio | jq
+
+# Run command
+printf '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"environment_run_cmd","arguments":{"environment_source":"/tmp/test","environment_id":"ENV_ID","command":"ls"}},"id":1}' | container-use stdio | jq
+```
+
+### Check Dagger Connection
+
+```bash
+# Test Dagger directly
+docker ps
+
+# Check Dagger version
+dagger version
+
+# Test Dagger container
+dagger core container from alpine:latest exec --args echo hello world stdout
+```
+
+### Inspect Container State
+
+```bash
+# The container ID is stored in Git notes
+git notes --ref container-use-state show container-use/fancy-mallard
+
+# Container is Dagger LLB (reproducible)
+# Can't inspect directly but can reload from ID
+```
+
+## Getting Help
+
+If you can't resolve your issue:
+
+1. **Check GitHub Issues**: [github.com/dagger/container-use/issues](https://github.com/dagger/container-use/issues)
+2. **Search Discord**: [container-use.com/discord](https://container-use.com/discord)
+3. **Ask in Discord**: Post in #container-use channel
+4. **Open an Issue**: Provide:
+   - `container-use version`
+   - `docker version`
+   - `go version` (if building from source)
+   - Error message and full command
+   - Relevant logs
+   - Steps to reproduce
+
+## Common Error Messages
+
+### "container-use: command not found"
+
+**Cause:** Not in PATH
+
+**Solution:**
+```bash
+# Find the binary
+which container-use
+
+# If not found, reinstall
+curl -fsSL https://raw.githubusercontent.com/dagger/container-use/main/install.sh | bash
+
+# Or add to PATH
+export PATH="$PATH:/path/to/container-use"
+```
+
+### "failed to connect to dagger engine"
+
+**Cause:** Docker not running or not accessible
+
+**Solution:**
+```bash
+# Start Docker
+# macOS/Windows: Open Docker Desktop
+# Linux: sudo systemctl start docker
+
+# Check Docker works
+docker ps
+
+# Check permissions
+groups | grep docker
+```
+
+### "failed to open repository: not a git repository"
+
+**Cause:** Not in a Git repository
+
+**Solution:**
+```bash
+git init
+git add .
+git commit -m "initial commit"
+```
+
+### "failed to create environment: context deadline exceeded"
+
+**Cause:** Operation timed out (network, Docker pull, etc.)
+
+**Solution:**
+```bash
+# Pre-pull images
+docker pull ubuntu:24.04
+
+# Simplify setup commands
+container-use config setup clear
+
+# Try again
+```
+
+### "exit code 137"
+
+**Cause:** Out of memory (OOM killer)
+
+**Solution:**
+```bash
+# Docker Desktop: Increase memory limit
+# Settings → Resources → Memory
+
+# Or reduce memory usage in commands
+```
+
+### "No space left on device"
+
+**Cause:** Disk full
+
+**Solution:**
+```bash
+# Check disk space
+df -h
+
+# Clean Docker
+docker system prune -a --volumes
+
+# Clean old environments
+container-use prune
+```
+
+## Best Practices to Avoid Issues
+
+1. **Keep Docker Running**: Always have Docker Desktop/daemon running
+2. **Regular Cleanup**: Delete old environments with `container-use delete` or `prune`
+3. **Test Configuration**: Test `.container-use/environment.json` changes in a separate environment first
+4. **Commit Often**: Use `environment_checkpoint` to create recovery points
+5. **Monitor Disk Space**: Keep at least 10GB free for Docker operations
+6. **Update Regularly**: Keep container-use, Docker, and agents updated
+7. **Use Meaningful Names**: Give environments descriptive titles for easier management
+8. **Read Logs**: Enable debug mode to understand what's happening
+
+## Platform-Specific Issues
+
+### macOS
+
+**Docker Desktop Required**: Container-use requires Docker Desktop or OrbStack
+
+**Rosetta 2 (Apple Silicon)**: Some x86 images may be slower
+```bash
+# Use ARM-native images when available
+container-use config base-image set --platform linux/arm64 ubuntu:24.04
+```
+
+### Windows
+
+**WSL2 Required**: Use WSL2 backend for Docker Desktop
+
+**Path Issues**: Use Unix-style paths in WSL
+```bash
+# Good: /home/user/project
+# Bad: C:\Users\user\project
+```
+
+**Line Endings**: Set Git to use LF
+```bash
+git config --global core.autocrlf false
+```
+
+### Linux
+
+**Docker Permissions**: Add user to docker group
+```bash
+sudo usermod -aG docker $USER
+# Log out and back in
+```
+
+**SELinux**: May need to configure SELinux policies
+```bash
+# Check if SELinux is blocking
+sudo ausearch -m avc -ts recent
+```
+
+## Further Resources
+
+- [Architecture Overview](/architecture) - Understand system internals
+- [Developer Guide](/developer-guide) - Contributing and debugging
+- [CLI Reference](/cli-reference) - Command documentation
+- [GitHub Issues](https://github.com/dagger/container-use/issues) - Known issues
+- [Discord](https://container-use.com/discord) - Community support

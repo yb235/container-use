@@ -1,0 +1,754 @@
+---
+title: Frequently Asked Questions
+description: "Common questions about container-use and how it works."
+icon: circle-question
+---
+
+## Getting Started
+
+### What is container-use?
+
+Container-use is a tool that creates isolated, containerized development environments for AI coding agents. It lets multiple agents work in parallel without interfering with each other or your local files.
+
+Think of it like having multiple virtual workspaces where agents can experiment safely, and you can review and merge their work when ready.
+
+### Why do I need container-use?
+
+**Without container-use:**
+- Agent modifies your files directly (risky)
+- Can't run multiple agents in parallel (conflicts)
+- Hard to experiment (changes are immediate)
+- No easy way to review before accepting (manual diff/revert)
+
+**With container-use:**
+- Agents work in isolated containers (safe)
+- Run multiple agents simultaneously (no conflicts)
+- Easy to experiment (create/delete environments instantly)
+- Review work with standard Git tools (diff, log, checkout)
+
+### How does it work?
+
+Container-use combines three technologies:
+
+1. **Git branches** - Each environment is a branch for version control
+2. **Git worktrees** - Provides filesystem isolation
+3. **Docker containers** - Provides execution isolation
+
+When an agent creates an environment, container-use sets up a new Git branch, creates a worktree, and spins up a container. The agent works inside the container, and all changes are tracked in Git.
+
+### What's the difference between container-use and Docker?
+
+Docker provides container technology, but container-use adds:
+
+- Git integration for version control
+- MCP protocol for agent communication
+- Automatic state management and persistence
+- Parallel environment management
+- Easy merge/apply workflows
+
+You need Docker to use container-use, but container-use makes it agent-friendly.
+
+## Installation & Setup
+
+### What are the prerequisites?
+
+- **Docker** (or OrbStack on macOS) - for running containers
+- **Git** - for version control
+- **Go 1.21+** (only if building from source)
+
+### Which agents are supported?
+
+Container-use works with any agent that supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/):
+
+- ✅ Claude Code (Anthropic)
+- ✅ Cursor
+- ✅ Amazon Q Developer
+- ✅ Windsurf
+- ✅ Zed
+- ✅ Goose
+- ✅ Any MCP-compatible agent
+
+See [Agent Integration](/agent-integrations) for setup guides.
+
+### Can I use container-use without an agent?
+
+Yes! You can use the CLI directly:
+
+```bash
+# Create environment manually
+container-use create "Work on feature"
+
+# Run commands via CLI (requires separate terminal tool)
+# But the main value is in agent integration
+```
+
+However, the primary value is enabling agents to work safely in parallel.
+
+### Does container-use work on Windows?
+
+Yes! Container-use works on Windows with WSL2. Requirements:
+
+1. Install WSL2
+2. Install Docker Desktop with WSL2 backend
+3. Run container-use from within WSL2
+
+**Note:** Run commands in WSL2 terminal, not Windows CMD/PowerShell.
+
+## Concepts
+
+### What is an "environment"?
+
+An environment is an isolated workspace consisting of:
+
+- **Git branch** - Tracks all changes with version control
+- **Container** - Isolated runtime with your code
+- **Worktree** - Filesystem copy of your code
+- **Configuration** - Base image, dependencies, services
+
+Each environment has a unique ID like "fancy-mallard" or "quiet-dolphin".
+
+### Where are environments stored?
+
+Environments are stored in:
+
+```
+~/.config/container-use/
+├── repos/
+│   └── project-name/        # Bare Git repository
+└── worktrees/
+    └── environment-id/       # Working copies
+```
+
+Your original repository is never modified unless you merge/apply.
+
+### What happens to my local files?
+
+**Nothing!** Your local files stay untouched until you explicitly merge or apply:
+
+```bash
+# Your files before agent works
+$ ls
+README.md  main.go
+
+# Agent creates environment and adds files
+# Your local directory is still:
+$ ls
+README.md  main.go
+
+# Review the work
+$ container-use diff fancy-mallard
++ new-feature.go
+
+# Accept when ready
+$ container-use merge fancy-mallard
+# Now your files include the changes
+```
+
+### What's the difference between merge and apply?
+
+**Merge:**
+- Preserves agent's commit history
+- Creates merge commit
+- Full Git history visible
+
+```bash
+container-use merge fancy-mallard
+# Git log shows all agent commits
+```
+
+**Apply:**
+- Squashes all changes
+- Stages files for your commit
+- You write commit message
+
+```bash
+container-use apply fancy-mallard
+git commit -m "Your custom message"
+```
+
+Use **merge** to keep detailed history, **apply** for clean single commit.
+
+### Can I delete an environment and start over?
+
+Absolutely! That's a key feature:
+
+```bash
+# Agent went down wrong path?
+container-use delete problematic-env
+
+# Start fresh
+# Tell agent: "Create a new environment and try different approach"
+```
+
+Environments are cheap and disposable.
+
+## Working with Environments
+
+### How do I see what an agent did?
+
+Multiple ways:
+
+```bash
+# See changes compared to your branch
+container-use diff fancy-mallard
+
+# See commit history
+container-use log fancy-mallard
+
+# Check out environment locally
+container-use checkout fancy-mallard
+ls
+cat app.py
+```
+
+### Can I continue working in an existing environment?
+
+Yes! Tell your agent:
+
+> "Work in environment fancy-mallard and add more features"
+
+Or in single-tenant mode, it automatically continues in the current environment.
+
+### How do I run multiple agents in parallel?
+
+Each agent creates their own environment:
+
+```bash
+# Terminal 1 - Claude working on frontend
+claude "Create React UI components"
+# Creates: fancy-mallard
+
+# Terminal 2 - Another agent on backend
+cursor "Build REST API with FastAPI"
+# Creates: quiet-dolphin
+
+# Both work simultaneously without conflicts!
+```
+
+Review and merge each environment separately when ready.
+
+### Can I modify an environment manually?
+
+Yes! Check it out and work normally:
+
+```bash
+container-use checkout fancy-mallard
+# Now you're on a local branch tracking the environment
+vim app.py
+git add app.py
+git commit -m "Manual fix"
+git push origin cu-fancy-mallard
+
+# Agent can continue from your changes
+```
+
+### What if I want to merge only some changes?
+
+```bash
+# Option 1: Cherry-pick specific commits
+git log container-use/fancy-mallard
+git cherry-pick <commit-sha>
+
+# Option 2: Apply and selectively stage
+container-use apply fancy-mallard
+git reset  # unstage all
+git add specific-file.py  # stage only what you want
+git commit -m "Partial merge"
+
+# Option 3: Edit after checkout
+container-use checkout fancy-mallard
+# Modify files as needed
+git commit --amend
+```
+
+## Configuration
+
+### How do I configure the base image?
+
+Create or edit `.container-use/environment.json`:
+
+```bash
+# Set base image
+container-use config base-image set python:3.11
+
+# View current config
+container-use config show
+```
+
+Or edit `.container-use/environment.json` directly:
+
+```json
+{
+  "base_image": "python:3.11",
+  "workdir": "/workdir"
+}
+```
+
+### How do I install dependencies automatically?
+
+Add setup commands to `.container-use/environment.json`:
+
+```bash
+# Via CLI
+container-use config setup add "apt-get update && apt-get install -y build-essential"
+container-use config install add "pip install -r requirements.txt"
+
+# Or edit JSON directly
+```
+
+```json
+{
+  "base_image": "python:3.11",
+  "setup_commands": [
+    "apt-get update",
+    "apt-get install -y build-essential"
+  ],
+  "install_commands": [
+    "pip install -r requirements.txt"
+  ]
+}
+```
+
+**When to use each:**
+- `setup_commands` - Run once when environment is created (system packages)
+- `install_commands` - Run after code is copied (project dependencies)
+
+### How do I add a database or other services?
+
+Agents can add services dynamically, or you can pre-configure:
+
+**Agent adds dynamically:**
+```
+"Add a PostgreSQL database to the environment"
+```
+
+**Pre-configure in JSON:**
+```json
+{
+  "services": [
+    {
+      "name": "postgres",
+      "image": "postgres:16",
+      "exposed_ports": [5432],
+      "env": ["POSTGRES_PASSWORD=secret"]
+    }
+  ]
+}
+```
+
+Services are accessible via hostname (e.g., `postgres:5432`).
+
+### Do configuration changes apply to existing environments?
+
+No! Configuration changes only affect **new** environments:
+
+```bash
+# Change config
+container-use config base-image set node:20
+
+# Existing environments still use old config
+container-use list  # Shows environments with various configs
+
+# New environments use new config
+# Agent creates new environment -> uses node:20
+```
+
+To update existing environment, import its config:
+
+```bash
+# Agent adapts environment and it works great
+container-use config import fancy-mallard
+# Now new environments start with adapted config
+```
+
+## Security & Secrets
+
+### How do I provide secrets to agents?
+
+Configure secrets that agents can use without seeing:
+
+```bash
+# 1Password secret
+container-use config secret set API_KEY op://vault/api/key
+
+# Environment variable
+container-use config secret set DB_PASSWORD env:DB_PASSWORD
+
+# File
+container-use config secret set SSH_KEY file:///home/user/.ssh/id_rsa
+```
+
+The agent can **use** the secrets, but the AI model never **sees** them.
+
+### Can agents access my SSH keys or credentials?
+
+Only if you explicitly configure them as secrets. By default, agents have no access to:
+
+- Your SSH keys
+- Your environment variables
+- Files outside the repository
+- Your host filesystem
+
+Everything runs in an isolated container.
+
+### Can agents make network requests?
+
+Yes, containers have internet access by default. They can:
+
+- Install packages (npm, pip, apt, etc.)
+- Make API calls
+- Clone repositories
+- Download files
+
+If you need network isolation, modify Docker network settings.
+
+### What data does container-use store?
+
+All data stays **local** on your machine:
+
+- Code in Git repositories (local)
+- Container states in Git notes (local)
+- Worktrees in `~/.config/container-use/` (local)
+- No cloud storage or external services
+
+Your code and work never leaves your computer.
+
+## Performance
+
+### How much disk space do environments use?
+
+Each environment uses:
+
+- **Git worktree**: ~100% of repository size (shared objects)
+- **Container layers**: Shared between environments with same base
+- **Container state**: Minimal (just metadata)
+
+Typical usage:
+- Small project: ~50MB per environment
+- Medium project: ~200MB per environment
+- Large project: ~500MB+ per environment
+
+Clean up old environments regularly:
+
+```bash
+container-use prune
+```
+
+### How much memory do environments use?
+
+Only **active** containers use memory:
+
+- Inactive environments: ~0 MB (just Git data)
+- Active container: Depends on what's running (typically 100-500MB)
+
+Containers stop when not in use, freeing memory.
+
+### Can I run many environments simultaneously?
+
+Yes, but consider resources:
+
+- **Disk**: Main limitation. 10+ environments = several GB
+- **Memory**: Each active container uses RAM
+- **CPU**: Minimal when idle, increases during builds/execution
+
+Practical limit: 5-10 active environments on typical laptop.
+
+### How do I clean up old environments?
+
+```bash
+# Delete specific environment
+container-use delete old-env
+
+# Interactive cleanup
+container-use prune
+
+# Also clean Docker
+docker system prune -a
+```
+
+## Troubleshooting
+
+### Agent says "environment not found"
+
+1. List environments: `container-use list`
+2. Verify you're in correct repository: `pwd`
+3. Check environment exists: `cd ~/.config/container-use/repos/`
+
+See [Troubleshooting](/troubleshooting) for more.
+
+### Commands fail in environment
+
+1. Check command syntax: Must be valid shell commands
+2. Verify dependencies: Are required tools installed?
+3. Check base image: Does it have necessary packages?
+
+Add missing tools to setup commands in config.
+
+### Container fails to build
+
+1. Test base image: `docker pull ubuntu:24.04`
+2. Check setup commands: Test manually in Docker
+3. Verify internet connection: Can you pull images?
+
+See [Troubleshooting](/troubleshooting) for detailed solutions.
+
+### How do I enable debug mode?
+
+```bash
+# For CLI
+container-use --debug <command>
+
+# For MCP server (in agent config)
+"args": ["--debug", "stdio"]
+```
+
+## Advanced Usage
+
+### Can I use container-use programmatically?
+
+Yes! Container-use is:
+
+1. **A Go library** - Import and use in your Go code
+2. **An MCP server** - Call via MCP protocol from any language
+3. **A CLI** - Call from shell scripts
+
+See [Developer Guide](/developer-guide) for API details.
+
+### Can I customize the worktree location?
+
+Currently worktrees are in `~/.config/container-use/worktrees/`. 
+
+For development/testing, use a custom base path:
+
+```go
+// In tests
+repo, err := repository.OpenWithBasePath(ctx, repoPath, "/tmp/cu-test")
+```
+
+Not exposed in CLI yet, but could be added.
+
+### Can I use with non-Git repositories?
+
+No, container-use requires Git for:
+
+- Version control
+- Branch management
+- State persistence
+- History tracking
+
+Just initialize Git:
+
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+```
+
+### How do I migrate environments between machines?
+
+Environments are in Git branches, so:
+
+```bash
+# Machine 1: Push environment branch
+git push origin container-use/fancy-mallard
+
+# Machine 2: Fetch and recreate
+git fetch origin container-use/fancy-mallard
+# Agent opens the environment
+```
+
+Or manually:
+
+```bash
+# Export
+cd ~/.config/container-use/repos/project
+git bundle create env.bundle container-use/fancy-mallard
+
+# Import
+cd ~/.config/container-use/repos/project
+git bundle unbundle env.bundle
+```
+
+### Can I use different Docker registries?
+
+Yes! Use any Docker registry in base image:
+
+```bash
+# Docker Hub (default)
+container-use config base-image set ubuntu:24.04
+
+# GitHub Container Registry
+container-use config base-image set ghcr.io/user/image:tag
+
+# Private registry
+container-use config base-image set registry.company.com/image:tag
+```
+
+Docker needs to be authenticated for private registries.
+
+## Comparison with Other Tools
+
+### How is this different from devcontainers?
+
+**Devcontainers:**
+- One container per repository
+- Modifies your local environment
+- IDE-integrated development
+
+**Container-use:**
+- Many parallel environments per repository
+- Keeps local environment untouched
+- Agent-focused workflows
+- Git-based review process
+
+Use both! Container-use for agent workflows, devcontainers for your IDE.
+
+### How is this different from Docker Compose?
+
+Docker Compose orchestrates multi-container apps. Container-use orchestrates multi-environment workflows.
+
+They're complementary:
+- Use **Compose** to define your app's services
+- Use **container-use** to manage agent environments working on that app
+
+### How is this different from Dagger?
+
+Container-use **uses** Dagger for container operations! Dagger provides:
+- Container API
+- Build caching
+- Cross-platform support
+
+Container-use adds:
+- Git integration
+- MCP protocol
+- Environment management
+- Agent workflows
+
+## Contributing
+
+### How can I contribute?
+
+Many ways:
+
+1. **Report bugs** - [GitHub Issues](https://github.com/dagger/container-use/issues)
+2. **Suggest features** - GitHub Discussions
+3. **Improve docs** - Submit PRs for documentation
+4. **Write code** - See [Developer Guide](/developer-guide)
+5. **Help others** - Answer questions in [Discord](https://container-use.com/discord)
+
+### Where do I start?
+
+1. Read [Developer Guide](/developer-guide)
+2. Check "good first issue" labels
+3. Ask in Discord #container-use channel
+4. Fork and experiment!
+
+### How do I test my changes?
+
+```bash
+# Build
+go build -o container-use ./cmd/container-use
+
+# Unit tests
+go test -short ./...
+
+# Integration tests
+go test ./...
+
+# Manual testing
+cd /tmp/test-repo
+echo '{"jsonrpc":"2.0","method":"ping","id":1}' | /path/to/container-use stdio
+```
+
+See [Developer Guide](/developer-guide) for detailed testing.
+
+## Getting Help
+
+### Where can I get help?
+
+1. **Documentation** - Check these docs first
+2. **Discord** - [Join #container-use](https://container-use.com/discord)
+3. **GitHub Issues** - Search existing issues
+4. **GitHub Discussions** - Ask questions
+
+### How do I report a bug?
+
+1. **Check if it's known** - Search GitHub Issues
+2. **Gather information**:
+   - `container-use version`
+   - `docker version`
+   - Error messages
+   - Steps to reproduce
+3. **Open issue** with details
+4. **Include logs** if available (`--debug` flag)
+
+### How do I request a feature?
+
+1. **Check if requested** - Search GitHub Issues/Discussions
+2. **Describe use case** - What problem does it solve?
+3. **Open discussion** - Get feedback before implementation
+4. **Submit PR** - Or wait for community/maintainer
+
+## Philosophy
+
+### Why MCP?
+
+The Model Context Protocol provides a standard way for AI agents to interact with tools. Benefits:
+
+- **Universal compatibility** - Works with any MCP agent
+- **Extensibility** - Easy to add new tools
+- **Security** - Controlled tool access
+- **Debugging** - Observable requests/responses
+
+### Why Git for state management?
+
+Git is:
+
+- **Universal** - Everyone has it
+- **Reliable** - Battle-tested version control
+- **Observable** - Standard tools work (log, diff, etc.)
+- **Distributed** - Easy backup and sharing
+
+### Why containers?
+
+Containers provide:
+
+- **Isolation** - Agents can't break your system
+- **Reproducibility** - Same environment everywhere
+- **Efficiency** - Shared layers, fast startup
+- **Portability** - Works on any platform
+
+## Roadmap
+
+### What's planned for the future?
+
+Check the [GitHub milestones](https://github.com/dagger/container-use/milestones) for roadmap.
+
+Some ideas being explored:
+
+- Better multi-agent collaboration
+- Improved service management
+- Enhanced configuration options
+- Performance optimizations
+- More agent integrations
+
+### Can I influence the roadmap?
+
+Yes! We're community-driven:
+
+- Share your use cases in Discord
+- Vote on feature requests in GitHub
+- Contribute implementations
+- Sponsor development
+
+## Further Reading
+
+- [Architecture Overview](/architecture) - System design and internals
+- [Developer Guide](/developer-guide) - Contributing and development
+- [MCP API Reference](/mcp-api-reference) - Complete API documentation
+- [Troubleshooting](/troubleshooting) - Common issues and solutions
+- [Environment Workflow](/environment-workflow) - Detailed workflows
+
+---
+
+**Have a question not answered here?** [Ask in Discord](https://container-use.com/discord) or [open a discussion](https://github.com/dagger/container-use/discussions).

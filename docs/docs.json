@@ -25,7 +25,9 @@
         "group": "Get Started",
         "pages": [
           "introduction",
-          "quickstart"
+          "quickstart",
+          "faq",
+          "documentation-guide"
         ]
       },
       {
@@ -33,14 +35,24 @@
         "pages": [
           "environment-workflow",
           "environment-configuration",
-          "secrets"
+          "secrets",
+          "troubleshooting"
         ]
       },
       {
         "group": "Reference",
         "pages": [
           "cli-reference",
-          "agent-integrations"
+          "agent-integrations",
+          "mcp-api-reference",
+          "glossary"
+        ]
+      },
+      {
+        "group": "Development",
+        "pages": [
+          "architecture",
+          "developer-guide"
         ]
       }
     ]
