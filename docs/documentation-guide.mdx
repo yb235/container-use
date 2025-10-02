@@ -1,0 +1,424 @@
+---
+title: Documentation Guide
+description: "Navigate container-use documentation and find what you need."
+icon: map
+---
+
+## Documentation Overview
+
+Welcome! This guide helps you navigate the container-use documentation and find exactly what you need.
+
+## Quick Navigation by Role
+
+### 👋 First-Time User
+
+**Start here:**
+1. [Introduction](/introduction) - What is container-use?
+2. [Quickstart](/quickstart) - Install and try it (5 minutes)
+3. [FAQ](/faq) - Common questions answered
+4. [Agent Integration](/agent-integrations) - Connect your AI agent
+
+**Then learn:**
+- [Environment Workflow](/environment-workflow) - How to use environments effectively
+- [Environment Configuration](/environment-configuration) - Customize your setup
+
+### 🎯 Daily User
+
+**Essential references:**
+- [CLI Reference](/cli-reference) - All commands and options
+- [Environment Workflow](/environment-workflow) - Best practices and patterns
+- [Troubleshooting](/troubleshooting) - Fix common issues
+
+**Advanced topics:**
+- [Secrets Management](/secrets) - Secure credentials
+- [Environment Configuration](/environment-configuration) - Advanced customization
+
+### 🛠️ Developer/Contributor
+
+**For contributing:**
+1. [Architecture Overview](/architecture) - Understand the system
+2. [Developer Guide](/developer-guide) - Setup and workflows
+3. [MCP API Reference](/mcp-api-reference) - Tool implementation
+
+**Deep dives:**
+- [Architecture](/architecture) - Design decisions and internals
+- [Developer Guide](/developer-guide) - Testing and debugging
+
+### 🤖 Agent Developer
+
+**For building/integrating agents:**
+1. [MCP API Reference](/mcp-api-reference) - Complete API documentation
+2. [Architecture Overview](/architecture) - How it works internally
+3. [Agent Integration](/agent-integrations) - Setup examples
+
+**Testing:**
+- [Developer Guide](/developer-guide) - Manual testing techniques
+- [Troubleshooting](/troubleshooting) - Debug agent issues
+
+## Documentation by Topic
+
+### Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Introduction" icon="book" href="/introduction">
+    What is container-use and why use it
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Install and run your first agent task (5 min)
+  </Card>
+  <Card title="FAQ" icon="circle-question" href="/faq">
+    Frequently asked questions
+  </Card>
+  <Card title="Agent Integration" icon="robot" href="/agent-integrations">
+    Setup guides for popular agents
+  </Card>
+</CardGroup>
+
+### Using Container Use
+
+<CardGroup cols={2}>
+  <Card title="Environment Workflow" icon="arrows-rotate" href="/environment-workflow">
+    Creating, reviewing, and managing environments
+  </Card>
+  <Card title="Environment Configuration" icon="gear" href="/environment-configuration">
+    Customize base images, dependencies, and setup
+  </Card>
+  <Card title="Secrets Management" icon="key" href="/secrets">
+    Secure API keys and credentials
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli-reference">
+    Complete command reference
+  </Card>
+</CardGroup>
+
+### Reference & Help
+
+<CardGroup cols={2}>
+  <Card title="MCP API Reference" icon="plug" href="/mcp-api-reference">
+    Complete MCP tool documentation
+  </Card>
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    Common issues and solutions
+  </Card>
+  <Card title="Documentation Guide" icon="map" href="/documentation-guide">
+    Navigate the docs (you are here!)
+  </Card>
+</CardGroup>
+
+### Development
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="diagram-project" href="/architecture">
+    System design and internals
+  </Card>
+  <Card title="Developer Guide" icon="code" href="/developer-guide">
+    Contributing and development workflows
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+### "I want to try container-use for the first time"
+
+1. [Quickstart](/quickstart) - Get running in 5 minutes
+2. [Agent Integration](/agent-integrations) - Connect your agent
+3. [Environment Workflow](/environment-workflow) - Learn the basics
+
+### "I need to fix an issue"
+
+1. [Troubleshooting](/troubleshooting) - Common problems
+2. [FAQ](/faq) - Quick answers
+3. [CLI Reference](/cli-reference) - Check command syntax
+
+### "I want to configure environments for my project"
+
+1. [Environment Configuration](/environment-configuration) - Setup guide
+2. [Secrets Management](/secrets) - Handle credentials
+3. [CLI Reference](/cli-reference) - Config commands
+
+### "I'm building an agent integration"
+
+1. [MCP API Reference](/mcp-api-reference) - Complete API
+2. [Architecture](/architecture) - How it works
+3. [Developer Guide](/developer-guide) - Testing
+
+### "I want to contribute to container-use"
+
+1. [Developer Guide](/developer-guide) - Setup and workflows
+2. [Architecture](/architecture) - Understand the codebase
+3. [MCP API Reference](/mcp-api-reference) - Tool structure
+
+## Documentation Structure
+
+### Get Started (New Users)
+Start your container-use journey with installation and basic concepts.
+
+**Pages:**
+- **Introduction** - Overview and value proposition
+- **Quickstart** - Hands-on tutorial
+- **FAQ** - Common questions for beginners
+
+### Guides (Regular Users)
+Learn how to use container-use effectively in your workflow.
+
+**Pages:**
+- **Environment Workflow** - Creating, reviewing, merging environments
+- **Environment Configuration** - Customizing setup
+- **Secrets Management** - Secure credentials
+- **Troubleshooting** - Solving common problems
+
+### Reference (When You Need Details)
+Detailed documentation for specific features and commands.
+
+**Pages:**
+- **CLI Reference** - All commands with examples
+- **Agent Integration** - Setup for different agents
+- **MCP API Reference** - Complete tool documentation
+
+### Development (Contributors)
+Technical documentation for developers and contributors.
+
+**Pages:**
+- **Architecture** - System design and components
+- **Developer Guide** - Contributing and testing
+
+## Key Concepts Explained
+
+Throughout the docs, you'll encounter these core concepts:
+
+### Environment
+An isolated workspace with:
+- Git branch for version control
+- Docker container for execution
+- Worktree for filesystem isolation
+
+**Learn more:** [Environment Workflow](/environment-workflow), [Architecture](/architecture)
+
+### MCP (Model Context Protocol)
+Standard protocol for AI agents to interact with tools.
+
+**Learn more:** [MCP API Reference](/mcp-api-reference), [Agent Integration](/agent-integrations)
+
+### Worktree
+Git feature providing filesystem isolation without checking out in main repo.
+
+**Learn more:** [Architecture](/architecture)
+
+### Container State
+Snapshot of container filesystem and configuration, stored in Git notes.
+
+**Learn more:** [Architecture](/architecture)
+
+### Configuration
+Project settings for base image, dependencies, and setup commands.
+
+**Learn more:** [Environment Configuration](/environment-configuration)
+
+### Secrets
+Sensitive data (API keys, passwords) referenced but not stored.
+
+**Learn more:** [Secrets Management](/secrets)
+
+## Document Formats
+
+### Tutorials (Step-by-Step)
+Follow along to accomplish a specific goal.
+
+**Examples:**
+- [Quickstart](/quickstart)
+- Sections in [Environment Workflow](/environment-workflow)
+
+### Reference (Look Up Information)
+Find specific commands, parameters, or behaviors.
+
+**Examples:**
+- [CLI Reference](/cli-reference)
+- [MCP API Reference](/mcp-api-reference)
+
+### Guides (Learn Concepts)
+Understand how and why things work.
+
+**Examples:**
+- [Environment Workflow](/environment-workflow)
+- [Environment Configuration](/environment-configuration)
+
+### Technical (Deep Dives)
+Detailed technical documentation for advanced users and contributors.
+
+**Examples:**
+- [Architecture](/architecture)
+- [Developer Guide](/developer-guide)
+
+## Finding Specific Information
+
+### Commands
+→ [CLI Reference](/cli-reference)
+
+### MCP Tools
+→ [MCP API Reference](/mcp-api-reference)
+
+### Error Messages
+→ [Troubleshooting](/troubleshooting)
+
+### Configuration Options
+→ [Environment Configuration](/environment-configuration)
+
+### Setup Instructions
+→ [Quickstart](/quickstart), [Agent Integration](/agent-integrations)
+
+### How It Works
+→ [Architecture](/architecture)
+
+### Contributing
+→ [Developer Guide](/developer-guide)
+
+### Common Questions
+→ [FAQ](/faq)
+
+## Reading Path by Goal
+
+### Goal: Start Using Container Use
+
+```
+Introduction
+    ↓
+Quickstart
+    ↓
+Agent Integration
+    ↓
+Environment Workflow
+    ↓
+[Use container-use daily]
+    ↓
+CLI Reference (as needed)
+```
+
+### Goal: Master Container Use
+
+```
+Introduction
+    ↓
+Quickstart
+    ↓
+Environment Workflow
+    ↓
+Environment Configuration
+    ↓
+Secrets Management
+    ↓
+CLI Reference
+    ↓
+Architecture (optional)
+```
+
+### Goal: Contribute to Project
+
+```
+Introduction
+    ↓
+Architecture
+    ↓
+Developer Guide
+    ↓
+MCP API Reference
+    ↓
+[Make contributions]
+```
+
+### Goal: Build Agent Integration
+
+```
+MCP API Reference
+    ↓
+Agent Integration (examples)
+    ↓
+Architecture
+    ↓
+Developer Guide (testing)
+```
+
+## Tips for Using the Docs
+
+### Search
+Use the search bar (top right) to find specific topics across all documentation.
+
+### Examples
+Most documentation includes code examples. Look for:
+- 💡 Code blocks with syntax highlighting
+- 📝 Example commands and outputs
+- ⚠️ Common mistakes to avoid
+
+### Navigation
+- **Sidebar** - Browse all pages
+- **Table of Contents** - Jump to sections within page
+- **Breadcrumbs** - See where you are in hierarchy
+- **Previous/Next** - Navigate sequentially
+
+### Notes and Callouts
+Pay attention to:
+
+<Note>
+  **Note** - Important information
+</Note>
+
+<Warning>
+  **Warning** - Be careful with this
+</Warning>
+
+<Info>
+  **Info** - Additional context
+</Info>
+
+### Code Examples
+
+Most code examples include:
+- Language syntax highlighting
+- Comments explaining key parts
+- Full working examples you can copy
+
+### Links and Cross-References
+
+Docs are heavily cross-linked:
+- Click blue links to related topics
+- "Learn more" points to detailed docs
+- "See also" suggests related pages
+
+## Getting Help
+
+If you can't find what you need in the docs:
+
+1. **Search** - Use the search bar
+2. **FAQ** - Check [frequently asked questions](/faq)
+3. **Troubleshooting** - See [common issues](/troubleshooting)
+4. **Discord** - Ask in [#container-use channel](https://container-use.com/discord)
+5. **GitHub** - Search or open an [issue](https://github.com/dagger/container-use/issues)
+
+## Contributing to Docs
+
+Found an issue or want to improve the docs?
+
+1. **Typos/Corrections** - Open an issue or PR
+2. **New Content** - Discuss in Discord or GitHub Discussions first
+3. **Examples** - Always welcome! Share your use cases
+4. **Clarity** - If something confused you, it likely confuses others
+
+**Documentation source:** `docs/` folder in [GitHub repo](https://github.com/dagger/container-use)
+
+## Feedback
+
+Help us improve the documentation:
+
+- 👍 **What's working?** - Let us know what's helpful
+- 🤔 **What's confusing?** - Tell us what needs clarification
+- 💡 **What's missing?** - Suggest new topics to cover
+- 🐛 **Found an error?** - Report inaccuracies
+
+**Share feedback:** [Discord](https://container-use.com/discord) or [GitHub Issues](https://github.com/dagger/container-use/issues)
+
+---
+
+**Ready to get started?** → [Introduction](/introduction) → [Quickstart](/quickstart)
+
+**Need help?** → [FAQ](/faq) → [Troubleshooting](/troubleshooting)
+
+**Want to dive deep?** → [Architecture](/architecture) → [Developer Guide](/developer-guide)

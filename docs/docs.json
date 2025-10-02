@@ -26,7 +26,8 @@
         "pages": [
           "introduction",
           "quickstart",
-          "faq"
+          "faq",
+          "documentation-guide"
         ]
       },
       {
@@ -43,7 +44,8 @@
         "pages": [
           "cli-reference",
           "agent-integrations",
-          "mcp-api-reference"
+          "mcp-api-reference",
+          "glossary"
         ]
       },
       {
